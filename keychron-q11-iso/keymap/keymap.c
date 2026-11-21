@@ -78,16 +78,16 @@ bool rgb_matrix_indicators_user(void) {
     uint8_t current_layer = get_highest_layer(layer_state);
     switch (current_layer) {
         case MAC_BASE:
-            rgb_matrix_set_color_all(SCALE(0), SCALE(64), SCALE(128));  // RGB red
+            rgb_matrix_set_color_all(SCALE(0), SCALE(64), SCALE(128));  // Blue
             break;
         case WIN_BASE:
-            rgb_matrix_set_color_all(SCALE(64), SCALE(0), SCALE(64));  // RGB green
+            rgb_matrix_set_color_all(SCALE(64), SCALE(0), SCALE(64));  // Purple
             break;
         case MAC_FN:
-            rgb_matrix_set_color_all(SCALE(0x8b), SCALE(0x00), SCALE(0x00));  // RGB blue
+            rgb_matrix_set_color_all(SCALE(0x8b), SCALE(0x00), SCALE(0x00));  // Dark red
             break;
         case WIN_FN:
-            rgb_matrix_set_color_all(SCALE(0x8b), SCALE(0x00), SCALE(0x00));  // RGB yellow
+            rgb_matrix_set_color_all(SCALE(0x8b), SCALE(0x00), SCALE(0x00));  // Dark red
             break;
         default:
             break;
