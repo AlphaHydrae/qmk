@@ -11,7 +11,7 @@ Planned changes to the Keychron Q11 firmware described in
 - [Step 4: Caps Lock overlay](#step-4-caps-lock-overlay)
 - [Step 5: Fn overlay](#step-5-fn-overlay)
 - [Step 6: update the README](#step-6-update-the-readme)
-- [Local setup, before the next flash](#local-setup-before-the-next-flash)
+- [Migrating an install from the symlink setup](#migrating-an-install-from-the-symlink-setup)
 - [To verify against the QMK source](#to-verify-against-the-qmk-source)
 
 ## Goals
@@ -162,18 +162,16 @@ Possible later tweak: give the held Fn key its own color.
   switch color, hidden RGB effects).
 - Describe the new lighting and the tests.
 
-## Local setup, before the next flash
+## Migrating an install from the symlink setup
 
-The repository now uses the QMK userspace layout (see the README), but no
-computer is set up for it yet:
+A QMK install set up before the userspace layout symlinked the old keymap
+folder into `~/qmk_firmware`. To migrate it:
 
-- Install QMK (`qmk setup`) on the computer used for flashing, if needed.
-- Run `qmk config user.overlay_dir="$(realpath .)"` from this repository.
-- On the computer that had the old setup, delete the old symlink in
+- Delete the old symlink in
   `~/qmk_firmware/keyboards/keychron/q11/iso_encoder/keymaps/`, which points to
-  a folder that no longer exists, and reset `user.keymap` to `alphahydrae` if it
-  was set.
-- Check that the first CI run on GitHub passes.
+  a folder that no longer exists.
+- Run `qmk config user.overlay_dir="$(realpath .)"` from this repository.
+- Reset `user.keymap` to `alphahydrae` if it was set.
 
 ## To verify against the QMK source
 

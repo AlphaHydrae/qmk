@@ -206,12 +206,23 @@ only the keymap, and QMK's own tree (`~/qmk_firmware`) stays untouched:
 ### One-time setup (macOS)
 
 ```bash
-# QMK command line tool
+# QMK command line tool. Homebrew asks to trust third-party taps first: qmk/qmk
+# is QMK's official tap, osx-cross/arm and osx-cross/avr provide the compilers.
+brew trust qmk/qmk
 brew install qmk/qmk/qmk
 
 # Clones QMK into ~/qmk_firmware and installs the compiler toolchain and the
 # flashing tools (dfu-util, etc.). Answer yes to the prompts.
 qmk setup
+
+# Homebrew doesn't put the compilers and the ARM binutils on the PATH
+# ("keg-only"), and dos2unix isn't installed by the above. Without this,
+# `qmk doctor` reports "Can't find arm-none-eabi-gcc in your path" (or crashes
+# on a missing `arm-none-eabi-size`) and the build fails. The Q11 only needs
+# the ARM tools; avr-gcc is for older AVR keyboards.
+brew link --force arm-none-eabi-gcc@8 arm-none-eabi-binutils avr-gcc@8
+brew install dos2unix
+qmk doctor
 
 # Optional: a GUI flashing tool, as an alternative to `qmk flash`
 brew install qmk-toolbox
@@ -348,13 +359,17 @@ JSON for the Q11 ISO knob version on its website, which can be loaded in VIA's
 
 ## Troubleshooting
 
-- **`qmk: bad interpreter: .../python: no such file or directory`**: the `qmk`
-  tool runs in its own Python environment, built against a specific Python
-  version (see `/opt/homebrew/Cellar/qmk/*/libexec/pyvenv.cfg`). Homebrew
-  removed that Python version when upgrading. `brew reinstall` doesn't help if
-  the prebuilt package still targets the old version. Either install the
-  missing version (e.g. `brew install python@3.13`), or rebuild `qmk` against
-  the current Python with `brew reinstall --build-from-source qmk/qmk/qmk`.
+- **`qmk: bad interpreter: .../python: no such file or directory`**, or `brew
+  install` ending with **`qmk/qmk/qmk: No such file or directory -
+  /opt/homebrew/bin/qmk`**: the `qmk` tool runs in its own Python environment,
+  built against a specific Python version (see
+  `/opt/homebrew/Cellar/qmk/*/libexec/pyvenv.cfg`). That version isn't
+  installed, either because Homebrew removed it when upgrading, or because the
+  prebuilt package targets an older version than the current Homebrew Python. A
+  plain `brew reinstall` doesn't help. Either install the missing version and
+  reinstall (`brew install python@3.13 && brew reinstall qmk/qmk/qmk`), or
+  rebuild `qmk` against the current Python with `brew reinstall
+  --build-from-source qmk/qmk/qmk`.
 - **`qmk flash` keeps waiting for the bootloader**: make sure the reset button
   is held *before* the cable is plugged in, that the cable goes straight to the
   half being flashed, and that the cable carries data.
