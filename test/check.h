@@ -7,8 +7,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static int checks;
-static int failures;
+static unsigned long long checks;
+static unsigned long long failures;
 
 #define CHECK(cond, ...)                                       \
     do {                                                       \
@@ -24,9 +24,9 @@ static int failures;
 
 static int check_result(void) {
     if (failures > 0) {
-        fprintf(stderr, "%d of %d checks failed\n", failures, checks);
+        fprintf(stderr, "%llu of %llu checks failed\n", failures, checks);
         return EXIT_FAILURE;
     }
-    printf("All %d checks passed\n", checks);
+    printf("All %llu checks passed\n", checks);
     return EXIT_SUCCESS;
 }

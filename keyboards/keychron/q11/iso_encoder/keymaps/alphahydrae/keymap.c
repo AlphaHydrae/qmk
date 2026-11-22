@@ -111,6 +111,8 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     uint8_t layer      = get_highest_layer(layer_state | default_layer_state);
     bool    caps_lock  = host_keyboard_led_state().caps_lock;
     uint8_t brightness = rgb_matrix_get_val();
+    // Whether the custom per-layer color effect is on, rather than a stock one.
+    bool layer_effect = rgb_matrix_get_mode() == RGB_MATRIX_CUSTOM_layer_color;
 
     // Every LED of the Q11 sits under a key, so looping over the matrix covers
     // them all. The matrix spans both halves; each half only draws its own LEDs.
@@ -122,11 +124,14 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
             }
 
             // The keycode on the layer in effect for this key, so that
-            // transparent keys resolve to the layer below.
-            keypos_t       key     = {.col = col, .row = row};
-            uint16_t       keycode = keymap_key_to_keycode(layer_switch_get_layer(key), key);
+            // transparent keys resolve to the layer below (for Caps Lock).
+            keypos_t key     = {.col = col, .row = row};
+            uint16_t keycode = keymap_key_to_keycode(layer_switch_get_layer(key), key);
+            // The keycode on the Fn layer itself, without falling through:
+            // the question is whether Fn does something for this key.
+            uint16_t       fn_keycode = is_fn_layer(layer) ? keymap_key_to_keycode(layer, key) : KC_NO;
             lighting_rgb_t color;
-            if (key_color(layer, keycode, caps_lock, brightness, &color)) {
+            if (key_color(layer, keycode, fn_keycode, layer_effect, caps_lock, brightness, &color)) {
                 rgb_matrix_set_color(led, color.r, color.g, color.b);
             }
         }

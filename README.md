@@ -62,26 +62,43 @@ overriding a hook. QMK calls it with a range of LEDs (`led_min` to `led_max`)
 because it spreads the drawing over several calls. Here it draws on top of
 whatever effect is selected:
 
-- While Fn is held, every key is dark red.
+- While Fn is held, the keys the Fn layer maps are dark red, and so are both Fn
+  keys. Those are `_______` on the Fn layer, so they're recognized by their
+  `MO()` keycode on the layer below. The others (the Fn layer's other `_______`
+  and `XXXXXXX` keys) step back so the red keys stand out:
+  - With the `layer_color` effect, they show the base color of the layer below
+    (blue or purple), dimmed to about half. The dimming rounds up, so these keys
+    never go black unless the backlight is at brightness 0. Its strength is
+    `FN_DIM` in `lighting.c`.
+  - With any other effect, they're black. Dimming what the effect drew would
+    need reading back the LED colors, which QMK doesn't offer, and the dimmed
+    blue or purple would look out of place over a rainbow.
 - Otherwise, while Caps Lock is on, the letter keys (`KC_A` to `KC_Z`) and the
   Caps Lock key itself are amber (`255, 140, 0`). With the Mac's input source
   set to Swiss French, Caps Lock doesn't change the accented keys (è, é, à…), so
   they aren't highlighted. The amber comes back when Fn is released.
 - The other keys keep the color the effect drew.
 
-The function decides per key, from its keycode on the layer actually in effect
-for it (`layer_switch_get_layer()`, then `keymap_key_to_keycode()`), so a
-transparent key counts as the key of the layer below. Both halves do this lookup
-with their own copy of the keymap, so they must use the same keymap (see [How
-firmware and VIA interact](#how-firmware-and-via-interact): VIA edits only reach
-the left half).
+The function decides per key, from two keycodes. For Caps Lock, its keycode on
+the layer actually in effect for it (`layer_switch_get_layer()`, then
+`keymap_key_to_keycode()`), so a transparent key counts as the key of the layer
+below. For Fn, its keycode on the Fn layer itself, without falling through,
+because the question there is whether Fn does something for that key. The
+first keycode also tells which keys are the Fn keys (`MO()`). Both
+halves do this lookup with their own copy of the keymap, so they must use the
+same keymap (see [How firmware and VIA
+interact](#how-firmware-and-via-interact): VIA edits only reach the left half).
 
-| Active layer                 | Color set (R, G, B) | Looks like | Drawn by        |
-| :--------------------------- | :------------------ | :--------- | :-------------- |
-| 0 (`BASE`)                   | `0, 64, 128`        | blue       | `layer_color`   |
-| 1 (`FN`, Fn held)            | `139, 0, 0`         | dark red   | `keymap.c`      |
-| 2 (`BRACKETS`)               | `64, 0, 64`         | purple     | `layer_color`   |
-| 3 (`BRACKETS_FN`, Fn held)   | `139, 0, 0`         | dark red   | `keymap.c`      |
+| Active layer               | Color set (R, G, B)       | Looks like               | Drawn by      |
+| :------------------------- | :------------------------ | :----------------------- | :------------ |
+| 0 (`BASE`)                 | `0, 64, 128`              | blue                     | `layer_color` |
+| 1 (`FN`, Fn held)          | `139, 0, 0` / `0, 33, 65` | dark red / dimmed blue   | `keymap.c`    |
+| 2 (`BRACKETS`)             | `64, 0, 64`               | purple                   | `layer_color` |
+| 3 (`BRACKETS_FN`, Fn held) | `139, 0, 0` / `33, 0, 33` | dark red / dimmed purple | `keymap.c`    |
+
+On the Fn layers, the red is for the keys the Fn layer maps and the Fn keys,
+the dimmed color for the others (black with an effect other than
+`layer_color`).
 
 All the colors are scaled by the backlight brightness (`rgb_matrix_get_val()`,
 0–255: `value * brightness / 255`), so the brightness keys and knob still work.
@@ -293,14 +310,24 @@ make test QMK_HOME=/path/to/qmk_firmware
 
 The input space is small (4 layers, 65,536 keycodes, Caps Lock on or off, 256
 brightness levels), so the tests check every combination rather than random
-samples, about 400 million checks in under a second:
+samples, about 3.5 billion checks in about three seconds. `key_color()` takes two
+keycodes, but only one matters on a given layer (the Fn layer keycode on the Fn
+layers, the other one elsewhere), so every value of that one is checked against
+a few samples of the other, with the `layer_color` effect on and off:
 
 - The documented colors at full brightness.
 - Every channel is the full color scaled by the brightness and never exceeds
   it, and brightness 0 gives black.
 - Exactly the 26 letter keycodes are affected by Caps Lock, and those plus
   `KC_CAPS` are highlighted.
-- On the Fn layers, every key is dark red, whatever the Caps Lock state.
+- Exactly two keycodes count as unmapped on the Fn layer: `KC_TRNS` and
+  `KC_NO`. Exactly the 32 `MO()` keycodes count as Fn keys.
+- The dimmed base color is about half the base color, never black unless the
+  brightness is 0, and visibly dimmer than the base color.
+- On the Fn layers, every key gets the overlay, whatever the Caps Lock state:
+  dark red if the Fn layer maps it or it's an Fn key, otherwise the dimmed base
+  color with `layer_color` and black with any other effect. Outside the Fn
+  layers, the Fn keys keep the effect's color.
 - Otherwise, a key is amber exactly when Caps Lock is on and it's a letter or
   the Caps Lock key, and every other key keeps the effect's color.
 
@@ -446,6 +473,9 @@ choice is saved.
     too. See the [split keyboard
     docs](https://docs.qmk.fm/features/split_keyboard) for what has to be
     synced.
+  - The tests in `test/` only cover the plain C logic. If tap-hold keys, combos
+    or tap dance are added, QMK's own test framework (`qmk_firmware/tests/`,
+    GoogleTest) can simulate key sequences through the real QMK pipeline.
   - Useful docs: [RGB matrix](https://docs.qmk.fm/features/rgb_matrix),
     [keycodes](https://docs.qmk.fm/keycodes),
     [layers](https://docs.qmk.fm/feature_layers).
@@ -471,7 +501,6 @@ choice is saved.
   `TG(BRACKETS)` key has no visible effect.
 - **The `layer_color` effect ignores the hue, saturation and speed keys**
   (Fn+E/D, R/F, T/G). They still change the stock effects.
-- **The Fn red covers the whole board**, whatever effect is selected.
 - `SPLIT_RGB_MATRIX_ENABLE` is defined twice in `config.h` and isn't a current
   QMK option. It can be removed.
 
