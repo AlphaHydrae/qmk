@@ -207,7 +207,7 @@ QMK looks for keymaps inside its own tree, under
 symlink this repository's keymap folder so edits here are picked up directly:
 
 ```bash
-ln -s ~/path/to/env/qmk/keychron-q11-iso/keymap \
+ln -s ~/path/to/qmk/keychron-q11-iso/keymap \
   ~/qmk_firmware/keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae-keychron-q11-iso
 ```
 

@@ -5,7 +5,7 @@ Planned changes to the Keychron Q11 firmware described in
 
 - [Goals](#goals)
 - [Decisions](#decisions)
-- [Step 0: move to its own repository](#step-0-move-to-its-own-repository)
+- [Step 0: userspace layout and build CI](#step-0-userspace-layout-and-build-ci)
 - [Step 1: make keymap.c the source of truth](#step-1-make-keymapc-the-source-of-truth)
 - [Step 2: base color as a custom effect](#step-2-base-color-as-a-custom-effect)
 - [Step 3: extract the color logic and test it](#step-3-extract-the-color-logic-and-test-it)
@@ -36,32 +36,34 @@ Planned changes to the Keychron Q11 firmware described in
 | Fn layer, `KC_NO` keys         | Treated like fall-through keys (dimmed). They don't fall through, but they do nothing      |
 | Caps Lock while Fn is held     | Fn overlay wins. The Caps Lock highlight comes back when Fn is released                    |
 | Source of truth for the layout | `keymap.c`. VIA stays enabled for experimenting, but VIA edits are temporary until copied  |
-| Repository                     | Move `qmk/` to its own repository, using the QMK userspace layout                          |
+| Repository layout              | QMK external userspace, with the firmware built by GitHub Actions                          |
 
-## Step 0: move to its own repository
+## Step 0: userspace layout and build CI
 
-Recommended, and best done **before** the other steps so the new commits land
-in the new repository.
+Best done **first**. Every later step changes the C code, and a build on each
+push catches compile errors before anything gets flashed. Moving the files now
+also means the test setup in step 3 is written once, against the final paths.
 
-Why:
+QMK's "external userspace" (the
+[`qmk/qmk_userspace`](https://github.com/qmk/qmk_userspace) template) is a
+repository holding only your keymaps:
 
-- **CI.** The new checks (firmware build, unit tests) need a full
-  `qmk_firmware` checkout and an ARM compiler. That has nothing to do with the
-  dotfiles in `env`, and would slow down or clutter its CI.
-- **QMK supports this layout.** QMK's "external userspace" (the
-  [`qmk/qmk_userspace`](https://github.com/qmk/qmk_userspace) template) is a
-  repository holding only your keymaps:
-  - keymaps live at `keyboards/keychron/q11/iso_encoder/keymaps/<name>/`
-  - a `qmk.json` lists the build targets
-  - `qmk config user.overlay_dir=<repo>` points QMK at it, which replaces the
-    symlink described in the README
-  - it ships a GitHub Actions workflow that builds the firmware on each push
-    and attaches the `.bin` to a release, so flashing doesn't even need a local
-    build.
-- **Cheap.** `qmk/` has 3 commits and nothing else in `env` refers to it.
-  `git subtree split -P qmk` (or `git filter-repo`) keeps its history.
+1. Move `keychron-q11-iso/keymap/` to
+   `keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/`, and
+   `via.layout.json` next to it. The folder name becomes the keymap name
+   (`-km alphahydrae`); the path already says which keyboard it is for.
+2. Add `qmk.json` listing the build target. `qmk userspace-add -kb
+   keychron/q11/iso_encoder -km alphahydrae` writes it.
+3. `qmk config user.overlay_dir="$(realpath .)"` points QMK at the repository.
+   This replaces the symlink described in the README; remove the symlink.
+4. Copy the template's GitHub Actions workflow
+   (`.github/workflows/build_binaries.yaml`). It builds every target in
+   `qmk.json` on each push and attaches the `.bin` to a GitHub release, so
+   flashing doesn't need a local build.
+5. Update the README: overlay setup instead of the symlink, new paths and
+   keymap name, and where to download the CI-built firmware.
 
-What it costs: one more repository to clone on a new machine.
+Step 3 adds the unit tests to this CI.
 
 ## Step 1: make keymap.c the source of truth
 
@@ -111,7 +113,7 @@ Split the code so that the decisions are plain C with no QMK dependencies,
 and only a thin loop talks to QMK.
 
 ```text
-keymap/
+keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/
   keymap.c            keymaps[], encoder_map[], the QMK hooks (thin)
   rgb_matrix_user.inc the custom effect (thin)
   lighting.h/.c       pure color logic, no QMK headers except keycodes
@@ -147,7 +149,8 @@ random samples. Properties to check:
 Keycode values (`KC_A`, `KC_TRNS`…) come from QMK's `quantum/keycodes.h`,
 which the tests include from the `qmk_firmware` checkout.
 
-CI (in the new repository) runs the tests and a firmware build on every push.
+Add a CI job that runs the tests on every push, next to the firmware build from
+step 0.
 
 Later, if tap-hold keys, combos or tap dance are added, QMK's own test
 framework (`qmk_firmware/tests/`, GoogleTest) can simulate key sequences
@@ -186,13 +189,13 @@ Possible later tweak: give the held Fn key its own color.
 - Remove the VIA reload steps, and the Known quirks that are fixed (Windows
   switch color, hidden RGB effects).
 - Describe the new lighting and the tests.
-- If the repository moves: replace the symlink setup with
-  `qmk config user.overlay_dir`, and point to the CI-built firmware.
 
 ## To verify against the QMK source
 
 Written from memory of QMK, not checked against the current source:
 
+- The workflow file name and `qmk userspace-add` in the current `qmk_userspace`
+  template and QMK CLI.
 - `RGB_MATRIX_CUSTOM_USER` and the `RGB_MATRIX_CUSTOM_<name>` mode name.
 - That Keychron's keyboard code for the Q11 doesn't paint its own indicators
   in a way that conflicts with `rgb_matrix_indicators_advanced_user()`.
