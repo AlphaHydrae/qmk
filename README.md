@@ -8,11 +8,13 @@ ISO split keyboard with two rotary encoders (knobs). It is built with
 Everything lives in the keymap folder,
 [`keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/`](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/):
 
-| File       | What it holds                                                    |
-| :--------- | :--------------------------------------------------------------- |
-| `keymap.c` | The key layout, the knobs, and the per-layer backlight color     |
-| `rules.mk` | Which QMK features are built in                                  |
-| `config.h` | Split keyboard settings (syncing state between the two halves)   |
+| File                  | What it holds                                                         |
+| :-------------------- | :-------------------------------------------------------------------- |
+| `keymap.c`            | The key layout, the knobs, and the red backlight while Fn is held     |
+| `rgb_matrix_user.inc` | The `layer_color` RGB effect: the per-layer backlight color           |
+| `layers.h`            | The layer names, shared by the two files above                        |
+| `rules.mk`            | Which QMK features are built in                                       |
+| `config.h`            | Split keyboard settings, and the RGB effect to start with             |
 
 It is compiled with QMK and flashed over USB, on each half. `keymap.c` is the
 source of truth for the layout. VIA is still enabled for experimenting, but VIA
@@ -33,38 +35,41 @@ interact](#how-firmware-and-via-interact)).
 The keymap folder started as a copy of Keychron's stock `default` keymap for
 `keychron/q11/iso_encoder` (from the QMK repository).
 
-### `keymap.c`: layout and per-layer backlight color
+### Backlight color
 
-`keymaps[]` and `encoder_map[]` hold the layout described in [The
-layout](#the-layout). The color comes from this function:
+The backlight color depends on the layer, in two parts.
 
-```c
-bool rgb_matrix_indicators_user(void) { ... }
-```
+**The `layer_color` effect**
+([`rgb_matrix_user.inc`](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/rgb_matrix_user.inc))
+is a custom RGB effect, like QMK's stock ones (breathing, rainbow…). It paints
+every key blue, or purple when the "brackets" layer is on, either toggled with
+`TG(BRACKETS)` or as the default layer on the Windows switch position. It's the
+effect the firmware starts with, and Fn+Q/A cycles through it and the stock
+effects (it comes after the last stock one).
 
-QMK defines a do-nothing ("weak") version of this function and calls it on every
-frame after the current RGB effect has been drawn. Defining your own version
-replaces it, a bit like overriding a hook. Here it:
+**The Fn color** comes from `rgb_matrix_indicators_advanced_user()` in
+`keymap.c`. QMK defines a do-nothing ("weak") version of this function and
+calls it on every frame, after the current effect has been drawn. Defining
+your own version replaces it, a bit like overriding a hook. Here it paints
+every key dark red while Fn is held, on top of whatever effect is selected.
+QMK calls it with a range of LEDs (`led_min` to `led_max`) because it spreads
+the drawing over several calls.
 
-1. Reads the current backlight brightness (`rgb_matrix_get_val()`, 0–255), so
-   the brightness keys and knob still dim/brighten the color.
-2. Finds the highest active layer, including the default layer set by the
-   Mac/Windows switch (`get_highest_layer(layer_state | default_layer_state)`).
-3. Paints **every key** a solid color for that layer, scaled by the brightness
-   (that's what the `SCALE()` macro does: `value * brightness / 255`).
+| Active layer                 | Color set (R, G, B) | Looks like | Drawn by        |
+| :--------------------------- | :------------------ | :--------- | :-------------- |
+| 0 (`BASE`)                   | `0, 64, 128`        | blue       | `layer_color`   |
+| 1 (`FN`, Fn held)            | `139, 0, 0`         | dark red   | `keymap.c`      |
+| 2 (`BRACKETS`)               | `64, 0, 64`         | purple     | `layer_color`   |
+| 3 (`BRACKETS_FN`, Fn held)   | `139, 0, 0`         | dark red   | `keymap.c`      |
 
-| Active layer                 | Color set (R, G, B) | Looks like |
-| :--------------------------- | :------------------ | :--------- |
-| 0 (`BASE`)                   | `0, 64, 128`        | blue       |
-| 1 (`FN`, Fn held)            | `139, 0, 0`         | dark red   |
-| 2 (`BRACKETS`)               | `64, 0, 64`         | purple     |
-| 3 (`BRACKETS_FN`, Fn held)   | `139, 0, 0`         | dark red   |
+Both scale the color by the backlight brightness (`rgb_matrix_get_val()`,
+0–255: `value * brightness / 255`), so the brightness keys and knob still work.
+The layers include the default layer set by the Mac/Windows switch
+(`layer_state | default_layer_state`).
 
-So the backlight tells you at a glance whether the "brackets" layer (layer 2)
-is on (purple) or off (blue), and turns red while Fn is held.
-
-The function returns `false`, which tells the keyboard-level code not to draw
-its own indicators on top.
+The function returns `true`, which lets the keyboard's own code (`q11.c` in
+QMK) draw its indicator on top: the Caps Lock key turns white while Caps Lock
+is on.
 
 ### `rules.mk`: build features
 
@@ -72,12 +77,13 @@ its own indicators on top.
 ENCODER_MAP_ENABLE = yes  # knobs are configured per layer (encoder_map[]); same as stock
 RGB_MATRIX_ENABLE = yes   # per-key RGB (already enabled by the keyboard, harmless)
 VIA_ENABLE = yes          # lets the VIA web app read/write the keymap (for experimenting)
+RGB_MATRIX_CUSTOM_USER = yes  # adds the effects from rgb_matrix_user.inc
 ```
 
 Keymaps in upstream QMK don't enable VIA, so without `VIA_ENABLE` the web app
 can't talk to this firmware.
 
-### `config.h`: split keyboard sync
+### `config.h`: split keyboard sync and starting effect
 
 The Q11 is a split keyboard. Each half has its own microcontroller and drives
 its own LEDs, and only the half plugged into the computer (the "master", the
@@ -91,6 +97,16 @@ halves, the layer state has to be sent to the other half:
 ```
 
 Without `SPLIT_LAYER_STATE_ENABLE`, the right half would stay the layer-0 color.
+The RGB settings (effect, brightness…) are synced without any option, because
+the keyboard declares how many LEDs each half has.
+
+```c
+#define RGB_MATRIX_DEFAULT_MODE RGB_MATRIX_CUSTOM_layer_color
+```
+
+This makes `layer_color` the starting effect. It only applies when the RGB
+settings stored in the EEPROM are reset (see [How firmware and VIA
+interact](#how-firmware-and-via-interact)).
 
 ## The layout
 
@@ -173,6 +189,10 @@ reset to them:
 - when you enter the bootloader by holding Esc/Del while plugging in, if that
   works for you (see [Flash](#flash-both-halves)). This also clears the EEPROM.
   The reset button doesn't clear it by itself.
+
+The RGB settings (effect, brightness, hue…) are stored in the EEPROM too, but
+the build-date reset doesn't touch them: they survive a flash. Only the Esc/Del
+reset clears them, back to the defaults in `config.h`.
 
 Since `keymap.c` holds the real layout, a reset is harmless. The flip side is
 that **VIA edits are temporary**: they last until the next reset, and they only
@@ -303,6 +323,10 @@ reset button + plug-in steps for each half.)
 ### Check the result
 
 Check that the first left key toggles the backlight between blue and purple.
+If the keyboard still shows the effect it had before flashing (RGB settings
+survive a flash), cycle with Fn+Q or Fn+A until the backlight is blue and the
+first left key turns it purple. `layer_color` comes right after the last stock
+effect. The choice is saved.
 
 ## Making further changes
 
@@ -343,9 +367,9 @@ Check that the first left key toggles the backlight between blue and purple.
   layer is active.
 - **On the Windows switch position**, layer 2 is already the default, so the
   `TG(BRACKETS)` key has no visible effect.
-- **RGB effects are hidden**: since every key is painted a solid color on each
-  frame, the effect chosen with Fn+Q/A isn't visible. Brightness, and turning
-  the backlight on/off, still work.
+- **The `layer_color` effect ignores the hue, saturation and speed keys**
+  (Fn+E/D, R/F, T/G). They still change the stock effects.
+- **The Fn red covers the whole board**, whatever effect is selected.
 - `SPLIT_RGB_MATRIX_ENABLE` is defined twice in `config.h` and isn't a current
   QMK option. It can be removed.
 

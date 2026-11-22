@@ -15,15 +15,7 @@
  */
 #include QMK_KEYBOARD_H
 
-// Layers 0 and 2 are the two default layers selected by the Mac/Windows switch
-// (Mac = 0, Windows = 2, see q11.c in QMK). TG(BRACKETS) also toggles layer 2
-// on top of layer 0.
-enum layers {
-    BASE,
-    FN,
-    BRACKETS,
-    BRACKETS_FN,
-};
+#include "layers.h"
 
 // clang-format off
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
@@ -70,27 +62,17 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
 #endif // ENCODER_MAP_ENABLE
 // clang-format on
 
-bool rgb_matrix_indicators_user(void) {
-    uint8_t brightness = rgb_matrix_get_val();
-
-    // Helper to scale color by brightness
-    #define SCALE(val) ((uint8_t)(((uint16_t)(val) * brightness) / 255))
-
-    // Include the default layer, which the Mac/Windows switch sets.
-    uint8_t current_layer = get_highest_layer(layer_state | default_layer_state);
-    switch (current_layer) {
-        case BASE:
-            rgb_matrix_set_color_all(SCALE(0), SCALE(64), SCALE(128));  // Blue
-            break;
-        case BRACKETS:
-            rgb_matrix_set_color_all(SCALE(64), SCALE(0), SCALE(64));  // Purple
-            break;
-        case FN:
-        case BRACKETS_FN:
-            rgb_matrix_set_color_all(SCALE(0x8b), SCALE(0x00), SCALE(0x00));  // Dark red
-            break;
-        default:
-            break;
+// Runs after every RGB effect (the custom layer_color one or a stock one), for
+// the LEDs in [led_min, led_max).
+bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
+    uint8_t layer = get_highest_layer(layer_state | default_layer_state);
+    if (layer == FN || layer == BRACKETS_FN) {
+        uint8_t brightness = rgb_matrix_get_val();
+        uint8_t red        = (uint8_t)(((uint16_t)0x8b * brightness) / 255);
+        for (uint8_t i = led_min; i < led_max; i++) {
+            rgb_matrix_set_color(i, red, 0, 0); // Dark red
+        }
     }
-    return false;
+    // true lets the keyboard code (q11.c) draw its Caps Lock indicator on top.
+    return true;
 }

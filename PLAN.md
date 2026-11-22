@@ -5,22 +5,19 @@ Planned changes to the Keychron Q11 firmware described in
 
 - [Goals](#goals)
 - [Decisions](#decisions)
-- [Step 1: base color as a custom effect](#step-1-base-color-as-a-custom-effect)
-- [Step 2: extract the color logic and test it](#step-2-extract-the-color-logic-and-test-it)
-- [Step 3: Caps Lock overlay](#step-3-caps-lock-overlay)
-- [Step 4: Fn overlay](#step-4-fn-overlay)
-- [Step 5: update the README](#step-5-update-the-readme)
+- [Step 1: extract the color logic and test it](#step-1-extract-the-color-logic-and-test-it)
+- [Step 2: Caps Lock overlay](#step-2-caps-lock-overlay)
+- [Step 3: Fn overlay](#step-3-fn-overlay)
+- [Step 4: update the README](#step-4-update-the-readme)
 - [Migrating an install from the symlink setup](#migrating-an-install-from-the-symlink-setup)
 - [To verify against the QMK source](#to-verify-against-the-qmk-source)
 
 ## Goals
 
-1. The per-layer color stops overriding the stock RGB effects. It becomes one
-   effect among others, and Fn+Q/A can still switch to the stock ones.
-2. With Caps Lock on, the keys it affects light up amber.
-3. With Fn held, only the keys the Fn layer actually maps light up red. The
+1. With Caps Lock on, the keys it affects light up amber.
+2. With Fn held, only the keys the Fn layer actually maps light up red. The
    others are dimmed instead of the whole board turning red.
-4. The color logic is unit-tested on the computer, without a keyboard.
+3. The color logic is unit-tested on the computer, without a keyboard.
 
 ## Decisions
 
@@ -33,28 +30,7 @@ Planned changes to the Keychron Q11 firmware described in
 | Fn layer, `KC_NO` keys         | Treated like fall-through keys (dimmed). They don't fall through, but they do nothing      |
 | Caps Lock while Fn is held     | Fn overlay wins. The Caps Lock highlight comes back when Fn is released                    |
 
-## Step 1: base color as a custom effect
-
-- `rules.mk`: `RGB_MATRIX_CUSTOM_USER = yes`
-- New `rgb_matrix_user.inc` declaring `RGB_MATRIX_EFFECT(layer_color)`, which
-  paints the per-layer base color (blue on layer 0, purple on layer 2).
-- `config.h`: `#define RGB_MATRIX_DEFAULT_MODE RGB_MATRIX_CUSTOM_layer_color`
-  so it's the starting effect.
-- Fn+Q/A now cycles through it and the stock effects.
-
-The overlays (steps 3 and 4) stay in `rgb_matrix_indicators_advanced_user()`.
-That hook runs after **any** effect, so the Caps Lock and Fn highlights also
-work on top of a stock effect.
-
-The overlays look up keycodes on each half, so both halves must use the same
-`keymaps[]`. Don't leave VIA edits on the keyboard (they only reach the left
-half).
-
-While Fn is held, dimmed fall-through keys show the dimmed **base color**,
-whatever effect is selected. The alternative (dimming whatever the effect drew)
-needs reading back LED colors, which QMK doesn't really offer.
-
-## Step 2: extract the color logic and test it
+## Step 1: extract the color logic and test it
 
 Split the code so that the decisions are plain C with no QMK dependencies,
 and only a thin loop talks to QMK.
@@ -62,6 +38,7 @@ and only a thin loop talks to QMK.
 ```text
 keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/
   keymap.c            keymaps[], encoder_map[], the QMK hooks (thin)
+  layers.h            the layer names
   rgb_matrix_user.inc the custom effect (thin)
   lighting.h/.c       pure color logic, no QMK headers except keycodes
   rules.mk            SRC += lighting.c
@@ -103,7 +80,15 @@ Later, if tap-hold keys, combos or tap dance are added, QMK's own test
 framework (`qmk_firmware/tests/`, GoogleTest) can simulate key sequences
 through the real QMK pipeline.
 
-## Step 3: Caps Lock overlay
+## Step 2: Caps Lock overlay
+
+The overlays (this step and the next) go in
+`rgb_matrix_indicators_advanced_user()`. That hook runs after **any** effect, so
+the Caps Lock and Fn highlights also work on top of a stock effect.
+
+The overlays look up keycodes on each half, so both halves must use the same
+`keymaps[]`. Don't leave VIA edits on the keyboard (they only reach the left
+half).
 
 - `host_keyboard_led_state().caps_lock` gives the Caps Lock state.
 - The Q11's keyboard code (`rgb_matrix_indicators_advanced_kb()` in `q11.c`)
@@ -123,7 +108,11 @@ Checked on the Mac: with Caps Lock on, the keys right of the letters still
 type `è¨éà$,.-`, exactly as without it. macOS Caps Lock doesn't uppercase the
 accented keys on this layout, so they aren't highlighted.
 
-## Step 4: Fn overlay
+## Step 3: Fn overlay
+
+While Fn is held, dimmed fall-through keys show the dimmed **base color**,
+whatever effect is selected. The alternative (dimming whatever the effect drew)
+needs reading back LED colors, which QMK doesn't really offer.
 
 While layer 1 or 3 is active:
 
@@ -135,9 +124,9 @@ While layer 1 or 3 is active:
 
 Possible later tweak: give the held Fn key its own color.
 
-## Step 5: update the README
+## Step 4: update the README
 
-- Remove the "RGB effects are hidden" Known quirk.
+- Remove the "Fn red covers the whole board" Known quirk.
 - Describe the new lighting and the tests.
 
 ## Migrating an install from the symlink setup
@@ -155,7 +144,6 @@ folder into `~/qmk_firmware`. To migrate it:
 
 Written from memory of QMK, not checked against the current source:
 
-- `RGB_MATRIX_CUSTOM_USER` and the `RGB_MATRIX_CUSTOM_<name>` mode name.
 - `SPLIT_LED_STATE_ENABLE` is the right option for syncing Caps Lock.
 - `quantum/keycodes.h` compiles on its own for the host tests.
 - How the Keychron VIA definition lists custom effects (cosmetic only).
