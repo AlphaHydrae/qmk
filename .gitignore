@@ -10,6 +10,9 @@
 *.bin
 *.uf2
 
+# Test binaries
+/test/build/
+
 # clangd
 compile_commands.json
 .clangd/

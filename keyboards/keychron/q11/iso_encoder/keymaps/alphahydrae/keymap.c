@@ -16,6 +16,7 @@
 #include QMK_KEYBOARD_H
 
 #include "layers.h"
+#include "lighting.h"
 
 enum custom_keycodes {
     // Switches the backlight to the layer_color effect (and turns it on).
@@ -83,11 +84,10 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 // the LEDs in [led_min, led_max).
 bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     uint8_t layer = get_highest_layer(layer_state | default_layer_state);
-    if (layer == FN || layer == BRACKETS_FN) {
-        uint8_t brightness = rgb_matrix_get_val();
-        uint8_t red        = (uint8_t)(((uint16_t)0x8b * brightness) / 255);
+    if (is_fn_layer(layer)) {
+        lighting_rgb_t color = fn_color(rgb_matrix_get_val());
         for (uint8_t i = led_min; i < led_max; i++) {
-            rgb_matrix_set_color(i, red, 0, 0); // Dark red
+            rgb_matrix_set_color(i, color.r, color.g, color.b);
         }
     }
     // true lets the keyboard code (q11.c) draw its Caps Lock indicator on top.

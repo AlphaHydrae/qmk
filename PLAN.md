@@ -1,14 +1,13 @@
-# Plan: layer lighting, Caps Lock and Fn overlays, tests
+# Plan: Caps Lock and Fn overlays
 
 Planned changes to the Keychron Q11 firmware described in
 [README.md](./README.md).
 
 - [Goals](#goals)
 - [Decisions](#decisions)
-- [Step 1: extract the color logic and test it](#step-1-extract-the-color-logic-and-test-it)
-- [Step 2: Caps Lock overlay](#step-2-caps-lock-overlay)
-- [Step 3: Fn overlay](#step-3-fn-overlay)
-- [Step 4: update the README](#step-4-update-the-readme)
+- [Step 1: Caps Lock overlay](#step-1-caps-lock-overlay)
+- [Step 2: Fn overlay](#step-2-fn-overlay)
+- [Step 3: update the README](#step-3-update-the-readme)
 - [Migrating an install from the symlink setup](#migrating-an-install-from-the-symlink-setup)
 - [To verify against the QMK source](#to-verify-against-the-qmk-source)
 
@@ -17,7 +16,9 @@ Planned changes to the Keychron Q11 firmware described in
 1. With Caps Lock on, the keys it affects light up amber.
 2. With Fn held, only the keys the Fn layer actually maps light up red. The
    others are dimmed instead of the whole board turning red.
-3. The color logic is unit-tested on the computer, without a keyboard.
+3. The new color logic goes in `lighting.c` and is unit-tested in
+   `test/test_lighting.c`, like the existing logic (see the README's Tests
+   section).
 
 ## Decisions
 
@@ -30,57 +31,7 @@ Planned changes to the Keychron Q11 firmware described in
 | Fn layer, `KC_NO` keys         | Treated like fall-through keys (dimmed). They don't fall through, but they do nothing      |
 | Caps Lock while Fn is held     | Fn overlay wins. The Caps Lock highlight comes back when Fn is released                    |
 
-## Step 1: extract the color logic and test it
-
-Split the code so that the decisions are plain C with no QMK dependencies,
-and only a thin loop talks to QMK.
-
-```text
-keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/
-  keymap.c            keymaps[], encoder_map[], the QMK hooks (thin)
-  layers.h            the layer names
-  rgb_matrix_user.inc the custom effect (thin)
-  lighting.h/.c       pure color logic, no QMK headers except keycodes
-  rules.mk            SRC += lighting.c
-test/
-  test_lighting.c     plain C tests, assert-based
-  Makefile            builds and runs the tests with the host compiler
-```
-
-`lighting.c` exposes small functions that take everything as arguments:
-
-- `base_color(layer, brightness)`: per-layer color, scaled.
-- `is_caps_affected(keycode)`: `KC_A`–`KC_Z`.
-- `is_fn_mapped(keycode)`: not `KC_TRNS` and not `KC_NO`.
-- `key_color(...)`: the final color of one key, given the layer, whether Fn is
-  held, the key's keycode on the Fn layer and on the active layer, the Caps
-  Lock state and the brightness.
-
-The glue in `keymap.c` loops over the keys, looks up their keycodes through
-QMK and calls `key_color()`.
-
-The input space is small, so the tests check **every combination** rather than
-random samples. Properties to check:
-
-- Brightness 0 gives black, and no channel ever exceeds the brightness.
-- Caps Lock off never gives amber. Caps Lock on gives amber exactly for the
-  affected keycodes, and only when Fn isn't held.
-- With Fn held, mapped keys are red and the others are the base color, dimmed.
-- Fall-through keys are dimmed but never black when brightness isn't 0
-  (guards the "not too dimmed" intent against rounding).
-- Without Fn or Caps Lock, every key has the base color.
-
-Keycode values (`KC_A`, `KC_TRNS`…) come from QMK's `quantum/keycodes.h`,
-which the tests include from the `qmk_firmware` checkout.
-
-Add a CI job that runs the tests on every push, next to the firmware build in
-`.github/workflows/build_binaries.yaml`.
-
-Later, if tap-hold keys, combos or tap dance are added, QMK's own test
-framework (`qmk_firmware/tests/`, GoogleTest) can simulate key sequences
-through the real QMK pipeline.
-
-## Step 2: Caps Lock overlay
+## Step 1: Caps Lock overlay
 
 The overlays (this step and the next) go in
 `rgb_matrix_indicators_advanced_user()`. That hook runs after **any** effect, so
@@ -108,7 +59,29 @@ Checked on the Mac: with Caps Lock on, the keys right of the letters still
 type `è¨éà$,.-`, exactly as without it. macOS Caps Lock doesn't uppercase the
 accented keys on this layout, so they aren't highlighted.
 
-## Step 3: Fn overlay
+In `lighting.c`:
+
+- `is_caps_affected(keycode)`: `KC_A`–`KC_Z`.
+- `key_color(...)`: the final color of one key, given the layer, the key's
+  keycode on the active layer, the Caps Lock state and the brightness. Step 2
+  adds whether Fn is held and the key's keycode on the Fn layer. It replaces
+  the `is_fn_layer()` / `fn_color()` calls in the hook; the glue loops over the
+  keys, looks up their keycodes through QMK and calls `key_color()`.
+
+Keycode values (`KC_A`, `KC_TRNS`…) come from QMK's `quantum/keycodes.h`.
+`lighting.c` includes it, and the tests include it from the `qmk_firmware`
+checkout (`QMK_HOME`, default `~/qmk_firmware`, passed to the `Makefile`). The
+CI test job then needs a `qmk_firmware` checkout too (a shallow or sparse one
+is enough).
+
+Test properties (every combination, as in the existing tests):
+
+- Brightness 0 gives black, and no channel ever exceeds the brightness.
+- Caps Lock off never gives amber. Caps Lock on gives amber exactly for the
+  affected keycodes.
+- Without Caps Lock, every key has the base color.
+
+## Step 2: Fn overlay
 
 While Fn is held, dimmed fall-through keys show the dimmed **base color**,
 whatever effect is selected. The alternative (dimming whatever the effect drew)
@@ -118,16 +91,35 @@ While layer 1 or 3 is active:
 
 - A key whose keycode **on the Fn layer** is mapped (`is_fn_mapped()`) is red.
 - Other keys get the base color of the layer below, dimmed (50% to start).
+  `base_color()` already returns the color of the layer below for the Fn
+  layers.
 - The lookup uses the Fn layer only, not `layer_switch_get_layer()`, because
   the question is "does Fn do something here", not "what does this key do
   now".
 
+In `lighting.c`: `is_fn_mapped(keycode)`, not `KC_TRNS` and not `KC_NO`, and
+the Fn arguments of `key_color()`.
+
+Test properties:
+
+- Caps Lock gives amber only when Fn isn't held.
+- With Fn held, mapped keys are red and the others are the base color, dimmed.
+- Fall-through keys are dimmed but never black when brightness isn't 0
+  (guards the "not too dimmed" intent against rounding).
+- Without Fn or Caps Lock, every key has the base color.
+
 Possible later tweak: give the held Fn key its own color.
 
-## Step 4: update the README
+Later, if tap-hold keys, combos or tap dance are added, QMK's own test
+framework (`qmk_firmware/tests/`, GoogleTest) can simulate key sequences
+through the real QMK pipeline.
+
+## Step 3: update the README
 
 - Remove the "Fn red covers the whole board" Known quirk.
-- Describe the new lighting and the tests.
+- Describe the new lighting, and what the tests now cover.
+- The table in "Backlight color" (and the "returns `true`" paragraph about the
+  white Caps Lock key) will be out of date.
 
 ## Migrating an install from the symlink setup
 

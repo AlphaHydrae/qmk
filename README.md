@@ -2,8 +2,11 @@
 
 Custom firmware and key layout for a [Keychron
 Q11](https://www.keychron.com/products/keychron-q11-qmk-custom-mechanical-keyboard)
-ISO split keyboard with two rotary encoders (knobs). It is built with
+ISO split keyboard with two rotary encoders (knobs), built with
 [QMK](https://qmk.fm).
+
+[![build](https://github.com/AlphaHydrae/qmk/actions/workflows/build.yml/badge.svg)](https://github.com/AlphaHydrae/qmk/actions/workflows/build.yml)
+[![MIT License](https://img.shields.io/static/v1?label=license&message=MIT&color=informational)](./LICENSE.txt)
 
 Everything lives in the keymap folder,
 [`keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/`](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/):
@@ -12,7 +15,8 @@ Everything lives in the keymap folder,
 | :-------------------- | :-------------------------------------------------------------------- |
 | `keymap.c`            | The key layout, the knobs, and the red backlight while Fn is held     |
 | `rgb_matrix_user.inc` | The `layer_color` RGB effect: the per-layer backlight color           |
-| `layers.h`            | The layer names, shared by the two files above                        |
+| `lighting.h` / `.c`   | The color logic itself, plain C with no QMK dependencies (tested)     |
+| `layers.h`            | The layer names, shared by the files above                            |
 | `rules.mk`            | Which QMK features are built in                                       |
 | `config.h`            | Split keyboard settings, and the RGB effect to start with             |
 
@@ -69,6 +73,13 @@ Both scale the color by the backlight brightness (`rgb_matrix_get_val()`,
 The layers include the default layer set by the Mac/Windows switch
 (`layer_state | default_layer_state`).
 
+The colors themselves are decided in
+[`lighting.c`](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/lighting.c),
+which doesn't include any QMK header. `rgb_matrix_user.inc` and `keymap.c` only
+read the keyboard's state (active layer, brightness), ask `lighting.c` for the
+color, and set the LEDs. This keeps the logic testable on the computer (see
+[Tests](#tests)).
+
 The function returns `true`, which lets the keyboard's own code (`q11.c` in
 QMK) draw its indicator on top: the Caps Lock key turns white while Caps Lock
 is on.
@@ -80,6 +91,8 @@ ENCODER_MAP_ENABLE = yes  # knobs are configured per layer (encoder_map[]); same
 RGB_MATRIX_ENABLE = yes   # per-key RGB (already enabled by the keyboard, harmless)
 VIA_ENABLE = yes          # lets the VIA web app read/write the keymap (for experimenting)
 RGB_MATRIX_CUSTOM_USER = yes  # adds the effects from rgb_matrix_user.inc
+
+SRC += lighting.c  # compiles lighting.c into the firmware
 ```
 
 Keymaps in upstream QMK don't enable VIA, so without `VIA_ENABLE` the web app
@@ -221,7 +234,35 @@ only the keymap, and QMK's own tree (`~/qmk_firmware`) stays untouched:
   Successful builds of `main` are also published as the [`latest`
   release](https://github.com/AlphaHydrae/qmk/releases/tag/latest), replacing
   the previous one. The template publishes after every push, even failed ones
-  and other branches. This repository doesn't.
+  and other branches. This repository doesn't. The same workflow also runs the
+  [tests](#tests), and doesn't publish if they fail.
+- [`test/`](./test/) holds the unit tests of the color logic.
+- The [`Makefile`](./Makefile) has shortcuts for the common tasks:
+
+  | Command        | Does                                                      |
+  | :------------- | :-------------------------------------------------------- |
+  | `make`         | `make test`, then `make compile`                          |
+  | `make test`    | Builds and runs the unit tests (only needs a C compiler)  |
+  | `make compile` | `qmk compile` for this keyboard and keymap                |
+  | `make flash`   | `qmk flash` for this keyboard and keymap (one half)       |
+  | `make clean`   | Deletes the test build and the firmware files             |
+
+### Tests
+
+[`test/test_lighting.c`](./test/test_lighting.c) tests `lighting.c` on the
+computer, without a keyboard or QMK, using the computer's own C compiler:
+
+```bash
+make test
+```
+
+The input space is small (4 layers, 256 brightness levels), so the tests check
+every combination rather than random samples: the documented colors at full
+brightness, that every channel is the full color scaled by the brightness and
+never exceeds it, and that brightness 0 gives black.
+
+The firmware code that reads the keyboard's state and sets the LEDs isn't
+covered, so lighting changes still need a check on the keyboard.
 
 ## Installing
 

@@ -7,23 +7,18 @@ RGB_MATRIX_EFFECT(layer_color)
 
 #ifdef RGB_MATRIX_CUSTOM_EFFECT_IMPLS
 
-#    include "layers.h"
+#    include "lighting.h"
 
 static bool layer_color(effect_params_t *params) {
     RGB_MATRIX_USE_LIMITS(led_min, led_max);
 
-    uint8_t brightness = rgb_matrix_get_val();
-#    define LAYER_COLOR_SCALE(val) ((uint8_t)(((uint16_t)(val) * brightness) / 255))
-
-    // The Fn layers sit on top of a base layer, so ignore them here. The Fn
-    // color is drawn by rgb_matrix_indicators_advanced_user() in keymap.c.
-    bool brackets = layer_state_cmp(layer_state | default_layer_state, BRACKETS);
-
-    uint8_t r = LAYER_COLOR_SCALE(brackets ? 64 : 0);
-    uint8_t g = LAYER_COLOR_SCALE(brackets ? 0 : 64);
-    uint8_t b = LAYER_COLOR_SCALE(brackets ? 64 : 128);
+    // The color itself is decided in lighting.c. On the Fn layers, this is the
+    // color of the layer below, and the Fn color is drawn on top by
+    // rgb_matrix_indicators_advanced_user() in keymap.c.
+    uint8_t        layer = get_highest_layer(layer_state | default_layer_state);
+    lighting_rgb_t color = base_color(layer, rgb_matrix_get_val());
     for (uint8_t i = led_min; i < led_max; i++) {
-        rgb_matrix_set_color(i, r, g, b);
+        rgb_matrix_set_color(i, color.r, color.g, color.b);
     }
     return rgb_matrix_check_finished_leds(led_max);
 }

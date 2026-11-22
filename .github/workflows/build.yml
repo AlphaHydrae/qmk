@@ -1,6 +1,6 @@
 # From the qmk/qmk_userspace template. Builds every target in qmk.json on each
 # push, and publishes the firmware as the "latest" GitHub release.
-name: Build QMK firmware
+name: build
 
 on: [push, workflow_dispatch]
 
@@ -8,6 +8,14 @@ permissions:
   contents: write
 
 jobs:
+  # Unit tests of the color logic, built with the runner's own C compiler.
+  test:
+    name: 'Unit tests'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make test
+
   build:
     name: 'QMK Userspace Build'
     uses: qmk/.github/.github/workflows/qmk_userspace_build.yml@main
@@ -20,5 +28,5 @@ jobs:
   publish:
     name: 'QMK Userspace Publish'
     uses: qmk/.github/.github/workflows/qmk_userspace_publish.yml@main
-    if: needs.build.result == 'success' && github.ref == 'refs/heads/main'
-    needs: build
+    if: needs.build.result == 'success' && needs.test.result == 'success' && github.ref == 'refs/heads/main'
+    needs: [build, test]
