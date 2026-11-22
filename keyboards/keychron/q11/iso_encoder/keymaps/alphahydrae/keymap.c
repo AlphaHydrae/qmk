@@ -15,8 +15,13 @@
  */
 #include QMK_KEYBOARD_H
 
+#include "fingerprint.h"
 #include "layers.h"
 #include "lighting.h"
+
+#ifdef DYNAMIC_KEYMAP_ENABLE
+#    include "dynamic_keymap.h"
+#endif
 
 enum custom_keycodes {
     // Switches the backlight to the layer_color effect (and turns it on).
@@ -67,6 +72,25 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
 };
 #endif // ENCODER_MAP_ENABLE
 // clang-format on
+
+#ifdef DYNAMIC_KEYMAP_ENABLE
+// VIA keeps its own copy of the keymap in the EEPROM, and QMK only reloads it
+// from keymaps[] when the firmware was built on a different day. This reloads
+// it whenever keymaps[] or encoder_map[] changed since the last startup, by
+// comparing their fingerprint with the one saved in the EEPROM's user slot.
+// keyboard_post_init_user() runs after QMK's own check (via_init()).
+void keyboard_post_init_user(void) {
+    uint32_t fingerprint = fingerprint_keycodes(FINGERPRINT_INIT, &keymaps[0][0][0], sizeof(keymaps) / sizeof(keymaps[0][0][0]));
+#    ifdef ENCODER_MAP_ENABLE
+    fingerprint = fingerprint_keycodes(fingerprint, &encoder_map[0][0][0], sizeof(encoder_map) / sizeof(encoder_map[0][0][0]));
+#    endif // ENCODER_MAP_ENABLE
+
+    if (eeconfig_read_user() != fingerprint) {
+        dynamic_keymap_reset();
+        eeconfig_update_user(fingerprint);
+    }
+}
+#endif // DYNAMIC_KEYMAP_ENABLE
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     switch (keycode) {

@@ -16,6 +16,7 @@ Everything lives in the keymap folder,
 | `keymap.c`            | The key layout, the knobs, and the Fn and Caps Lock overlays          |
 | `rgb_matrix_user.inc` | The `layer_color` RGB effect: the per-layer backlight color           |
 | `lighting.h` / `.c`   | The color logic itself, plain C (tested)                              |
+| `fingerprint.h` / `.c`| The keymap fingerprint that reloads VIA's copy on change (tested)     |
 | `layers.h`            | The layer names, shared by the files above                            |
 | `rules.mk`            | Which QMK features are built in                                       |
 | `config.h`            | Split keyboard settings, and the RGB effect to start with             |
@@ -219,16 +220,26 @@ memory (EEPROM), and that copy is what VIA edits and what the keyboard uses.
 `keymap.c` only provides the **initial values** of that copy, and the copy is
 reset to them:
 
-- when you flash a firmware **built on a different day** than the one
-  currently on the keyboard (QMK derives a "validity" stamp from the build
-  date), and
+- when you flash a firmware whose **`keymaps[]` or `encoder_map[]` changed**. At
+  startup, `keyboard_post_init_user()` in `keymap.c` computes a fingerprint of
+  both
+  ([`fingerprint.c`](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/fingerprint.c))
+  and compares it with the one saved in the EEPROM's user slot
+  (`eeconfig_read_user()`). If they differ, it reloads the copy
+  (`dynamic_keymap_reset()`) and saves the new fingerprint. Flashing a firmware
+  with an unchanged layout keeps the copy, VIA edits included.
+- when you flash a firmware **built on a different day** than the one currently
+  on the keyboard. That's QMK's own check: it derives a "validity" stamp from
+  the build date only, so on its own it misses layout changes flashed on the
+  same day, which is why the fingerprint check exists.
 - when you enter the bootloader by holding Esc/Del while plugging in, if that
   works for you (see [Flash](#flash-both-halves)). This also clears the EEPROM.
   The reset button doesn't clear it by itself.
 
 The RGB settings (effect, brightness, hue…) are stored in the EEPROM too, but
-the build-date reset doesn't touch them: they survive a flash. Only the Esc/Del
-reset clears them, back to the defaults in `config.h`.
+the first two resets don't touch them: they survive a flash. Only the Esc/Del
+reset clears them, back to the defaults in `config.h`. VIA macros are only
+cleared by the build-date and Esc/Del resets.
 
 Since `keymap.c` holds the real layout, a reset is harmless. The flip side is
 that **VIA edits are temporary**: they last until the next reset, and they only
@@ -255,7 +266,8 @@ only the keymap, and QMK's own tree (`~/qmk_firmware`) stays untouched:
   the previous one. The template publishes after every push, even failed ones
   and other branches. This repository doesn't. The same workflow also runs the
   [tests](#tests), and doesn't publish if they fail.
-- [`test/`](./test/) holds the unit tests of the color logic.
+- [`test/`](./test/) holds the unit tests of the color logic and the keymap
+  fingerprint.
 - The [`Makefile`](./Makefile) has shortcuts for the common tasks:
 
   | Command        | Does                                                      |
@@ -292,8 +304,23 @@ samples, about 400 million checks in under a second:
 - Otherwise, a key is amber exactly when Caps Lock is on and it's a letter or
   the Caps Lock key, and every other key keeps the effect's color.
 
-The firmware code that reads the keyboard's state and sets the LEDs isn't
-covered, so lighting changes still need a check on the keyboard.
+[`test/test_fingerprint.c`](./test/test_fingerprint.c) tests `fingerprint.c`.
+The property that matters is that changing any single keycode changes the
+fingerprint, so a layout change always reloads VIA's copy:
+
+- One step of the fingerprint maps all 65,536 keycodes to different values, for
+  several starting values. This is why a single change can't go unnoticed.
+- In a keymap-sized array, each position changed to 512 other keycodes changes
+  the fingerprint.
+- Chaining calls (`keymaps[]`, then `encoder_map[]`) gives the same result as
+  one call over both.
+
+Both programs share the small `CHECK()` harness in
+[`test/check.h`](./test/check.h).
+
+The firmware code that reads the keyboard's state, sets the LEDs and compares
+the fingerprint with the EEPROM isn't covered, so these changes still need a
+check on the keyboard.
 
 ## Installing
 

@@ -19,14 +19,19 @@ CFLAGS += -I$(KEYMAP_DIR) -I$(QMK_HOME)/quantum
 
 all: test compile
 
-# Builds and runs the unit tests of the color logic with the computer's own C
-# compiler (no keyboard, and only QMK's keycodes header).
-test: $(BUILD_DIR)/test_lighting
+# Builds and runs the unit tests (color logic, keymap fingerprint) with the
+# computer's own C compiler (no keyboard, and only QMK's keycodes header).
+test: $(BUILD_DIR)/test_lighting $(BUILD_DIR)/test_fingerprint
 	./$(BUILD_DIR)/test_lighting
+	./$(BUILD_DIR)/test_fingerprint
 
-$(BUILD_DIR)/test_lighting: test/test_lighting.c $(KEYMAP_DIR)/lighting.c $(KEYMAP_DIR)/lighting.h $(KEYMAP_DIR)/layers.h $(QMK_HOME)/quantum/keycodes.h
+$(BUILD_DIR)/test_lighting: test/test_lighting.c test/check.h $(KEYMAP_DIR)/lighting.c $(KEYMAP_DIR)/lighting.h $(KEYMAP_DIR)/layers.h $(QMK_HOME)/quantum/keycodes.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o $@ test/test_lighting.c $(KEYMAP_DIR)/lighting.c
+
+$(BUILD_DIR)/test_fingerprint: test/test_fingerprint.c test/check.h $(KEYMAP_DIR)/fingerprint.c $(KEYMAP_DIR)/fingerprint.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -o $@ test/test_fingerprint.c $(KEYMAP_DIR)/fingerprint.c
 
 compile:
 	qmk compile -kb $(KEYBOARD) -km $(KEYMAP)

@@ -2,29 +2,12 @@
 // combination of layer, keycode, Caps Lock state and brightness is checked, not
 // random samples.
 
-#include <stdio.h>
-#include <stdlib.h>
-
+#include "check.h"
 #include "keycodes.h"
 #include "layers.h"
 #include "lighting.h"
 
 #define NUM_LAYERS 4
-
-static int checks;
-static int failures;
-
-#define CHECK(cond, ...)                                       \
-    do {                                                       \
-        checks++;                                              \
-        if (!(cond)) {                                         \
-            failures++;                                        \
-            fprintf(stderr, "%s:%d: %s: ", __FILE__, __LINE__, \
-                    #cond);                                    \
-            fprintf(stderr, __VA_ARGS__);                      \
-            fputc('\n', stderr);                               \
-        }                                                      \
-    } while (0)
 
 static bool rgb_equal(lighting_rgb_t a, lighting_rgb_t b) {
     return a.r == b.r && a.g == b.g && a.b == b.b;
@@ -167,11 +150,5 @@ int main(void) {
     test_fn();
     test_caps_affected();
     test_key_color();
-
-    if (failures > 0) {
-        fprintf(stderr, "%d of %d checks failed\n", failures, checks);
-        return EXIT_FAILURE;
-    }
-    printf("All %d checks passed\n", checks);
-    return EXIT_SUCCESS;
+    return check_result();
 }
