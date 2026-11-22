@@ -10,16 +10,15 @@
 static unsigned long long checks;
 static unsigned long long failures;
 
-#define CHECK(cond, ...)                                       \
-    do {                                                       \
-        checks++;                                              \
-        if (!(cond)) {                                         \
-            failures++;                                        \
-            fprintf(stderr, "%s:%d: %s: ", __FILE__, __LINE__, \
-                    #cond);                                    \
-            fprintf(stderr, __VA_ARGS__);                      \
-            fputc('\n', stderr);                               \
-        }                                                      \
+#define CHECK(cond, ...)                                               \
+    do {                                                               \
+        checks++;                                                      \
+        if (!(cond)) {                                                 \
+            failures++;                                                \
+            fprintf(stderr, "%s:%d: %s: ", __FILE__, __LINE__, #cond); \
+            fprintf(stderr, __VA_ARGS__);                              \
+            fputc('\n', stderr);                                       \
+        }                                                              \
     } while (0)
 
 static int check_result(void) {

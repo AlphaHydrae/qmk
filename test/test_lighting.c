@@ -141,8 +141,7 @@ static void test_layer_hold(void) {
 
 static void test_caps_affected(void) {
     // Every letter, in the order of the alphabet, not just the first and last.
-    const uint16_t letters[] = {KC_A, KC_B, KC_C, KC_D, KC_E, KC_F, KC_G, KC_H, KC_I, KC_J, KC_K, KC_L, KC_M,
-                                KC_N, KC_O, KC_P, KC_Q, KC_R, KC_S, KC_T, KC_U, KC_V, KC_W, KC_X, KC_Y, KC_Z};
+    const uint16_t letters[] = {KC_A, KC_B, KC_C, KC_D, KC_E, KC_F, KC_G, KC_H, KC_I, KC_J, KC_K, KC_L, KC_M, KC_N, KC_O, KC_P, KC_Q, KC_R, KC_S, KC_T, KC_U, KC_V, KC_W, KC_X, KC_Y, KC_Z};
     int            affected  = 0;
     for (size_t i = 0; i < sizeof(letters) / sizeof(letters[0]); i++) {
         CHECK(is_caps_affected(letters[i]), "letter %zu", i);
@@ -155,8 +154,7 @@ static void test_caps_affected(void) {
     // Keys around the letters that Caps Lock leaves alone on the Swiss French
     // Mac layout. Letters with modifiers (S(KC_A)…) are covered by the count
     // above; their macros aren't in keycodes.h.
-    const uint16_t unaffected[] = {KC_TRNS, KC_NO, KC_CAPS, KC_1, KC_0, KC_LBRC, KC_RBRC, KC_SCLN,
-                                   KC_QUOT, KC_NUHS, KC_GRV, KC_COMM, KC_DOT, KC_SLSH, KC_SPC};
+    const uint16_t unaffected[] = {KC_TRNS, KC_NO, KC_CAPS, KC_1, KC_0, KC_LBRC, KC_RBRC, KC_SCLN, KC_QUOT, KC_NUHS, KC_GRV, KC_COMM, KC_DOT, KC_SLSH, KC_SPC};
     for (size_t i = 0; i < sizeof(unaffected) / sizeof(unaffected[0]); i++) {
         CHECK(!is_caps_affected(unaffected[i]), "keycode 0x%04X", unaffected[i]);
     }
@@ -252,9 +250,7 @@ static void test_key_color(void) {
                             // Every key gets the overlay: red, or for the others
                             // dimmed with layer_color and black otherwise.
                             CHECK(overlaid, "layer %d, effect %d, caps %d, Fn keycode 0x%04X, brightness %d", layer, effect, caps, fn_keycode, brightness);
-                            lighting_rgb_t expected = red      ? fn_color((uint8_t)brightness)
-                                                      : effect ? dimmed_base_color((uint8_t)layer, (uint8_t)brightness)
-                                                               : rgb(0, 0, 0);
+                            lighting_rgb_t expected = red ? fn_color((uint8_t)brightness) : effect ? dimmed_base_color((uint8_t)layer, (uint8_t)brightness) : rgb(0, 0, 0);
                             CHECK(rgb_equal(c, expected), "layer %d, effect %d, caps %d, keycode 0x%04X, Fn keycode 0x%04X, brightness %d", layer, effect, caps, keycodes[i], fn_keycode, brightness);
                             CHECK(rgb_within(c, (uint8_t)brightness), "layer %d, Fn keycode 0x%04X, brightness %d", layer, fn_keycode, brightness);
                             // With layer_color, the dimmed keys are black exactly

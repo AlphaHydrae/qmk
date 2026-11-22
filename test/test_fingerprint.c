@@ -45,7 +45,7 @@ static void test_step_is_injective(void) {
 
     for (size_t b = 0; b < sizeof(before) / sizeof(before[0]); b++) {
         for (uint32_t keycode = 0; keycode <= 0xFFFF; keycode++) {
-            uint16_t kc       = (uint16_t)keycode;
+            uint16_t kc      = (uint16_t)keycode;
             outputs[keycode] = fingerprint_keycodes(before[b], &kc, 1);
         }
         qsort(outputs, 0x10000, sizeof(outputs[0]), compare_u32);

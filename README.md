@@ -275,25 +275,38 @@ only the keymap, and QMK's own tree (`~/qmk_firmware`) stays untouched:
   (`-km alphahydrae`).
 - [`qmk.json`](./qmk.json) lists the build targets (keyboard + keymap).
   `qmk userspace-add` / `qmk userspace-remove` edit it.
-- [`.github/workflows/build_binaries.yaml`](./.github/workflows/build_binaries.yaml)
-  builds every target on each push, against the latest upstream `qmk_firmware`.
-  Each run's firmware is downloadable from its page in the GitHub Actions tab.
-  Successful builds of `main` are also published as the [`latest`
+- [`.github/workflows/build.yml`](./.github/workflows/build.yml) builds every
+  target on each push, against the latest upstream `qmk_firmware`. Each run's
+  firmware is downloadable from its page in the GitHub Actions tab. Successful
+  builds of `main` are also published as the [`latest`
   release](https://github.com/AlphaHydrae/qmk/releases/tag/latest), replacing
   the previous one. The template publishes after every push, even failed ones
   and other branches. This repository doesn't. The same workflow also runs the
-  [tests](#tests), and doesn't publish if they fail.
+  [tests](#tests) and checks the [formatting](#formatting), and doesn't publish
+  if either fails.
 - [`test/`](./test/) holds the unit tests of the color logic and the keymap
   fingerprint.
 - The [`Makefile`](./Makefile) has shortcuts for the common tasks:
 
-  | Command        | Does                                                      |
-  | :------------- | :-------------------------------------------------------- |
-  | `make`         | `make test`, then `make compile`                          |
-  | `make test`    | Builds and runs the unit tests (no `qmk` tool needed)     |
-  | `make compile` | `qmk compile` for this keyboard and keymap                |
-  | `make flash`   | `qmk flash` for this keyboard and keymap (one half)       |
-  | `make clean`   | Deletes the test build and the firmware files             |
+  | Command             | Does                                                      |
+  | :------------------ | :-------------------------------------------------------- |
+  | `make`              | `make check-format`, `make test`, then `make compile`     |
+  | `make format`       | Formats the C files with clang-format                     |
+  | `make check-format` | Fails if a C file isn't formatted (changes nothing)       |
+  | `make test`         | Builds and runs the unit tests (no `qmk` tool needed)     |
+  | `make compile`      | `qmk compile` for this keyboard and keymap                |
+  | `make flash`        | `qmk flash` for this keyboard and keymap (one half)       |
+  | `make clean`        | Deletes the test build and the firmware files             |
+
+### Formatting
+
+The C files are formatted with
+[clang-format](https://clang.llvm.org/docs/ClangFormat.html), using
+[`.clang-format`](./.clang-format), a copy of `qmk_firmware`'s own so the keymap
+follows QMK's style. Its very long column limit keeps the keymap's layout grids
+on one line per row. Run `make format` before committing; CI runs `make
+check-format` with clang-format 23, and different major versions can format some
+code differently.
 
 ### Tests
 

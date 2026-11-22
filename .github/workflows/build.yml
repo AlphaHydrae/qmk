@@ -8,6 +8,17 @@ permissions:
   contents: write
 
 jobs:
+  # Checks that the C files are formatted. clang-format comes from PyPI, pinned
+  # to the same major version as the one used locally: the runner's own is older
+  # and other versions can format some code differently.
+  format:
+    name: 'Formatting'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: pipx install clang-format==23.1.5
+      - run: make check-format
+
   # Unit tests of the color logic, built with the runner's own C compiler. They
   # only need QMK's keycodes header, so qmk_firmware is checked out sparsely.
   test:
@@ -36,5 +47,5 @@ jobs:
   publish:
     name: 'QMK Userspace Publish'
     uses: qmk/.github/.github/workflows/qmk_userspace_publish.yml@main
-    if: needs.build.result == 'success' && needs.test.result == 'success' && github.ref == 'refs/heads/main'
-    needs: [build, test]
+    if: needs.build.result == 'success' && needs.test.result == 'success' && needs.format.result == 'success' && github.ref == 'refs/heads/main'
+    needs: [build, test, format]

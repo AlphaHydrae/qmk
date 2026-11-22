@@ -1,6 +1,7 @@
-# Shortcuts for the common tasks. `make` runs the tests and compiles the
-# firmware. The firmware targets need the `qmk` tool (see README.md); the tests
-# need a C compiler and a qmk_firmware checkout (for quantum/keycodes.h).
+# Shortcuts for the common tasks. `make` checks the formatting, runs the tests
+# and compiles the firmware. The firmware targets need the `qmk` tool (see
+# README.md); the tests need a C compiler and a qmk_firmware checkout (for
+# quantum/keycodes.h); the formatting targets need clang-format.
 
 KEYBOARD := keychron/q11/iso_encoder
 KEYMAP   := alphahydrae
@@ -15,9 +16,22 @@ CC     ?= cc
 CFLAGS ?= -std=c99 -Wall -Wextra -Wpedantic -Werror -O1 -g
 CFLAGS += -I$(KEYMAP_DIR) -I$(QMK_HOME)/quantum
 
-.PHONY: all test compile flash clean
+CLANG_FORMAT ?= clang-format
 
-all: test compile
+# Every C file in the repository, as configured in .clang-format.
+C_FILES := $(shell git ls-files '*.c' '*.h')
+
+.PHONY: all format check-format test compile flash clean
+
+all: check-format test compile
+
+# Formats the C files in place.
+format:
+	$(CLANG_FORMAT) -i $(C_FILES)
+
+# Fails if any C file isn't formatted, without changing it.
+check-format:
+	$(CLANG_FORMAT) --dry-run --Werror $(C_FILES)
 
 # Builds and runs the unit tests (color logic, keymap fingerprint) with the
 # computer's own C compiler (no keyboard, and only QMK's keycodes header).
