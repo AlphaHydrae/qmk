@@ -1,16 +1,15 @@
 # Plan: layer lighting, Caps Lock and Fn overlays, tests
 
 Planned changes to the Keychron Q11 firmware described in
-[README.md](./README.md). Nothing here is implemented yet.
+[README.md](./README.md).
 
 - [Goals](#goals)
 - [Decisions](#decisions)
-- [Step 1: make keymap.c the source of truth](#step-1-make-keymapc-the-source-of-truth)
-- [Step 2: base color as a custom effect](#step-2-base-color-as-a-custom-effect)
-- [Step 3: extract the color logic and test it](#step-3-extract-the-color-logic-and-test-it)
-- [Step 4: Caps Lock overlay](#step-4-caps-lock-overlay)
-- [Step 5: Fn overlay](#step-5-fn-overlay)
-- [Step 6: update the README](#step-6-update-the-readme)
+- [Step 1: base color as a custom effect](#step-1-base-color-as-a-custom-effect)
+- [Step 2: extract the color logic and test it](#step-2-extract-the-color-logic-and-test-it)
+- [Step 3: Caps Lock overlay](#step-3-caps-lock-overlay)
+- [Step 4: Fn overlay](#step-4-fn-overlay)
+- [Step 5: update the README](#step-5-update-the-readme)
 - [Migrating an install from the symlink setup](#migrating-an-install-from-the-symlink-setup)
 - [To verify against the QMK source](#to-verify-against-the-qmk-source)
 
@@ -18,12 +17,10 @@ Planned changes to the Keychron Q11 firmware described in
 
 1. The per-layer color stops overriding the stock RGB effects. It becomes one
    effect among others, and Fn+Q/A can still switch to the stock ones.
-2. Flashing no longer loses the layout. No more reloading `via.layout.json`
-   after every flash.
-3. With Caps Lock on, the keys it affects light up amber.
-4. With Fn held, only the keys the Fn layer actually maps light up red. The
+2. With Caps Lock on, the keys it affects light up amber.
+3. With Fn held, only the keys the Fn layer actually maps light up red. The
    others are dimmed instead of the whole board turning red.
-5. The color logic is unit-tested on the computer, without a keyboard.
+4. The color logic is unit-tested on the computer, without a keyboard.
 
 ## Decisions
 
@@ -35,34 +32,8 @@ Planned changes to the Keychron Q11 firmware described in
 | Fn layer, fall-through keys    | The base color, dimmed. Start at 50% and adjust ("not too dimmed")                         |
 | Fn layer, `KC_NO` keys         | Treated like fall-through keys (dimmed). They don't fall through, but they do nothing      |
 | Caps Lock while Fn is held     | Fn overlay wins. The Caps Lock highlight comes back when Fn is released                    |
-| Source of truth for the layout | `keymap.c`. VIA stays enabled for experimenting, but VIA edits are temporary until copied  |
 
-## Step 1: make keymap.c the source of truth
-
-Today `keymaps[]` holds the stock layout and the real layout lives in VIA's
-storage on the keyboard, which is reset by most flashes. VIA's storage starts
-from `keymaps[]` when it's reset, so once `keymaps[]` holds the real layout, a
-reset is harmless.
-
-1. Generate the layout from the VIA backup with `qmk via2json`, which also
-   reorders keys from matrix order to `LAYOUT_92_iso(...)` order. Paste the
-   result into `keymaps[]` and `encoder_map[]`.
-2. Replace the VIA macros:
-   - `MACRO(2)` (Shift+Ctrl+Cmd+T) becomes the single keycode `LCSG(KC_T)`.
-   - The empty `MACRO(3)`–`MACRO(5)` become `KC_NO`.
-3. Decide on the layer 0 Home key (`KC_WWW_HOME` vs `KC_HOME`, see the
-   README's Known quirks).
-4. Use `get_highest_layer(layer_state | default_layer_state)` wherever the
-   active layer is needed. This fixes the quirk where the Windows switch
-   position shows layer 0's color.
-5. Keep or delete `via.layout.json`. Once `keymaps[]` is the truth, it's only a
-   reference.
-
-This step also matters for steps 4 and 5. VIA only writes to the half plugged
-into the computer, so the right half keeps using `keymaps[]`. If the two
-differed, the overlays would look up different keys on each half.
-
-## Step 2: base color as a custom effect
+## Step 1: base color as a custom effect
 
 - `rules.mk`: `RGB_MATRIX_CUSTOM_USER = yes`
 - New `rgb_matrix_user.inc` declaring `RGB_MATRIX_EFFECT(layer_color)`, which
@@ -71,15 +42,19 @@ differed, the overlays would look up different keys on each half.
   so it's the starting effect.
 - Fn+Q/A now cycles through it and the stock effects.
 
-The overlays (steps 4 and 5) stay in `rgb_matrix_indicators_advanced_user()`.
+The overlays (steps 3 and 4) stay in `rgb_matrix_indicators_advanced_user()`.
 That hook runs after **any** effect, so the Caps Lock and Fn highlights also
 work on top of a stock effect.
+
+The overlays look up keycodes on each half, so both halves must use the same
+`keymaps[]`. Don't leave VIA edits on the keyboard (they only reach the left
+half).
 
 While Fn is held, dimmed fall-through keys show the dimmed **base color**,
 whatever effect is selected. The alternative (dimming whatever the effect drew)
 needs reading back LED colors, which QMK doesn't really offer.
 
-## Step 3: extract the color logic and test it
+## Step 2: extract the color logic and test it
 
 Split the code so that the decisions are plain C with no QMK dependencies,
 and only a thin loop talks to QMK.
@@ -128,9 +103,13 @@ Later, if tap-hold keys, combos or tap dance are added, QMK's own test
 framework (`qmk_firmware/tests/`, GoogleTest) can simulate key sequences
 through the real QMK pipeline.
 
-## Step 4: Caps Lock overlay
+## Step 3: Caps Lock overlay
 
 - `host_keyboard_led_state().caps_lock` gives the Caps Lock state.
+- The Q11's keyboard code (`rgb_matrix_indicators_advanced_kb()` in `q11.c`)
+  paints the Caps Lock key's LED (index 23) white when Caps Lock is on, but
+  only if `rgb_matrix_indicators_advanced_user()` returns `true`. Return
+  `false` so it doesn't overwrite the amber.
 - `config.h`: `#define SPLIT_LED_STATE_ENABLE`. Without it, only the left half
   knows about Caps Lock, and Y, U, H, J, N, M… wouldn't light up.
 - Each key's keycode is looked up on the layer actually in effect for it
@@ -144,7 +123,7 @@ Checked on the Mac: with Caps Lock on, the keys right of the letters still
 type `è¨éà$,.-`, exactly as without it. macOS Caps Lock doesn't uppercase the
 accented keys on this layout, so they aren't highlighted.
 
-## Step 5: Fn overlay
+## Step 4: Fn overlay
 
 While layer 1 or 3 is active:
 
@@ -156,10 +135,9 @@ While layer 1 or 3 is active:
 
 Possible later tweak: give the held Fn key its own color.
 
-## Step 6: update the README
+## Step 5: update the README
 
-- Remove the VIA reload steps, and the Known quirks that are fixed (Windows
-  switch color, hidden RGB effects).
+- Remove the "RGB effects are hidden" Known quirk.
 - Describe the new lighting and the tests.
 
 ## Migrating an install from the symlink setup
@@ -178,10 +156,6 @@ folder into `~/qmk_firmware`. To migrate it:
 Written from memory of QMK, not checked against the current source:
 
 - `RGB_MATRIX_CUSTOM_USER` and the `RGB_MATRIX_CUSTOM_<name>` mode name.
-- That Keychron's keyboard code for the Q11 doesn't paint its own indicators
-  in a way that conflicts with `rgb_matrix_indicators_advanced_user()`.
-- `qmk via2json` exists in the installed QMK version and handles this layout.
-- `LCSG()` exists (otherwise `LCTL(LSFT(LGUI(KC_T)))`).
 - `SPLIT_LED_STATE_ENABLE` is the right option for syncing Caps Lock.
 - `quantum/keycodes.h` compiles on its own for the host tests.
 - How the Keychron VIA definition lists custom effects (cosmetic only).

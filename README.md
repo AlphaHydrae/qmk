@@ -6,20 +6,21 @@ ISO split keyboard with two rotary encoders (knobs). It is built with
 [QMK](https://qmk.fm).
 
 Everything lives in the keymap folder,
-[`keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/`](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/),
-but in two parts that are installed in two different ways:
+[`keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/`](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/):
 
-| What                        | File                                                | How it gets on the keyboard                  |
-| :-------------------------- | :-------------------------------------------------- | :------------------------------------------- |
-| **Firmware** (C code)       | `keymap.c`, `config.h`, `rules.mk`                  | Compile with QMK, flash over USB (each half) |
-| **Key layout** (VIA backup) | [`via.layout.json`](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/via.layout.json) | Load in the VIA web app after flashing       |
+| File       | What it holds                                                    |
+| :--------- | :--------------------------------------------------------------- |
+| `keymap.c` | The key layout, the knobs, and the per-layer backlight color     |
+| `rules.mk` | Which QMK features are built in                                  |
+| `config.h` | Split keyboard settings (syncing state between the two halves)   |
 
-The firmware adds things the web app can't do: the **backlight color changes
-with the active layer**. The VIA layout holds the key remapping, macros and knob
-assignments, which the web app *can* edit.
+It is compiled with QMK and flashed over USB, on each half. `keymap.c` is the
+source of truth for the layout. VIA is still enabled for experimenting, but VIA
+edits are temporary (see [How firmware and VIA
+interact](#how-firmware-and-via-interact)).
 
 - [What the firmware does](#what-the-firmware-does)
-- [What the VIA layout does](#what-the-via-layout-does)
+- [The layout](#the-layout)
 - [How firmware and VIA interact](#how-firmware-and-via-interact)
 - [Repository layout and CI](#repository-layout-and-ci)
 - [Installing](#installing)
@@ -29,13 +30,13 @@ assignments, which the web app *can* edit.
 
 ## What the firmware does
 
-The keymap folder is a copy of Keychron's stock `default` keymap for
-`keychron/q11/iso_encoder` (from the QMK repository) with these changes.
+The keymap folder started as a copy of Keychron's stock `default` keymap for
+`keychron/q11/iso_encoder` (from the QMK repository).
 
-### `keymap.c`: per-layer backlight color
+### `keymap.c`: layout and per-layer backlight color
 
-The key definitions (`keymaps[]`, `encoder_map[]`) are **unchanged** from the
-stock keymap. The only addition is this function:
+`keymaps[]` and `encoder_map[]` hold the layout described in [The
+layout](#the-layout). The color comes from this function:
 
 ```c
 bool rgb_matrix_indicators_user(void) { ... }
@@ -47,20 +48,20 @@ replaces it, a bit like overriding a hook. Here it:
 
 1. Reads the current backlight brightness (`rgb_matrix_get_val()`, 0–255), so
    the brightness keys and knob still dim/brighten the color.
-2. Finds the highest active layer (`get_highest_layer(layer_state)`).
+2. Finds the highest active layer, including the default layer set by the
+   Mac/Windows switch (`get_highest_layer(layer_state | default_layer_state)`).
 3. Paints **every key** a solid color for that layer, scaled by the brightness
    (that's what the `SCALE()` macro does: `value * brightness / 255`).
 
-| Active layer             | Color set (R, G, B) | Looks like |
-| :----------------------- | :------------------ | :--------- |
-| 0 (`MAC_BASE`)           | `0, 64, 128`        | blue       |
-| 1 (`MAC_FN`, Fn held)    | `139, 0, 0`         | dark red   |
-| 2 (`WIN_BASE`)           | `64, 0, 64`         | purple     |
-| 3 (`WIN_FN`, Fn held)    | `139, 0, 0`         | dark red   |
+| Active layer                 | Color set (R, G, B) | Looks like |
+| :--------------------------- | :------------------ | :--------- |
+| 0 (`BASE`)                   | `0, 64, 128`        | blue       |
+| 1 (`FN`, Fn held)            | `139, 0, 0`         | dark red   |
+| 2 (`BRACKETS`)               | `64, 0, 64`         | purple     |
+| 3 (`BRACKETS_FN`, Fn held)   | `139, 0, 0`         | dark red   |
 
-Combined with the VIA layout below, the backlight tells you at a glance whether
-the toggled "brackets" layer (layer 2) is on (purple) or off (blue), and turns
-red while Fn is held.
+So the backlight tells you at a glance whether the "brackets" layer (layer 2)
+is on (purple) or off (blue), and turns red while Fn is held.
 
 The function returns `false`, which tells the keyboard-level code not to draw
 its own indicators on top.
@@ -70,11 +71,11 @@ its own indicators on top.
 ```make
 ENCODER_MAP_ENABLE = yes  # knobs are configured per layer (encoder_map[]); same as stock
 RGB_MATRIX_ENABLE = yes   # per-key RGB (already enabled by the keyboard, harmless)
-VIA_ENABLE = yes          # lets the VIA web app read/write the keymap
+VIA_ENABLE = yes          # lets the VIA web app read/write the keymap (for experimenting)
 ```
 
-`VIA_ENABLE` is the important one. Keymaps in upstream QMK don't enable VIA, so
-without it the web app can't talk to your custom firmware.
+Keymaps in upstream QMK don't enable VIA, so without `VIA_ENABLE` the web app
+can't talk to this firmware.
 
 ### `config.h`: split keyboard sync
 
@@ -91,53 +92,46 @@ halves, the layer state has to be sent to the other half:
 
 Without `SPLIT_LAYER_STATE_ENABLE`, the right half would stay the layer-0 color.
 
-## What the VIA layout does
+## The layout
 
-[`via.layout.json`](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/via.layout.json)
-is a backup exported from the VIA web app ("Save + Load" → "Save Current
-Layout"). It stores 4 layers, the knob assignments and the macros. Compared to
-the stock keymap:
+Compared to the stock keymap:
 
-### Layer 0: base (Mac switch position)
+### Layer 0: base (`BASE`, Mac switch position)
 
 - **Top row is plain F1–F12** (stock has the media/brightness keys here; they
   moved to the Fn layer).
 - **ISO macOS key swap**: the key left of `1` sends `KC_NUBS` and the key
   right of left Shift sends `KC_GRV`. This swaps them back to the positions
   printed on the keycaps, fixing a well-known macOS quirk with ISO keyboards.
-- **Left macro column** (the 5 extra keys on the far left, top to bottom):
-  1. `TG(2)`: toggle layer 2 on/off (backlight turns purple/blue).
-  2. `MACRO(2)`: Shift+Ctrl+Cmd+T.
-  3. `MACRO(3)`, 4. `MACRO(4)`, 5. `MACRO(5)`: assigned, but those macros are
-     empty, so they do nothing yet.
-- **Home key** sends `KC_WWW_HOME` (browser home) instead of Home. See
-  [Known quirks](#known-quirks).
-- Both Fn keys are `MO(1)`, which activates layer 1 while held.
+- **Left column** (the 5 extra keys on the far left, top to bottom):
+  1. `TG(BRACKETS)`: toggle layer 2 on/off (backlight turns purple/blue).
+  2. to 5. `XXXXXXX` (`KC_NO`): unused, they do nothing.
+- Both Fn keys are `MO(FN)`, which activates layer 1 while held.
 - **Knobs**: left = backlight brightness, right = volume. Pressing either knob
   = mute.
 
-### Layer 1: Fn (while Fn is held on layer 0)
+### Layer 1: Fn (`FN`, while Fn is held on layer 0)
 
-| Key                                  | Action                                         |
-| :----------------------------------- | :--------------------------------------------- |
-| F1 / F2                              | Screen brightness down / up                    |
-| F3 / F4                              | `CUSTOM(0)` / `CUSTOM(1)`: Keychron's custom keycodes (Mission Control / Launchpad in the stock keymap) |
-| F5 / F6                              | Backlight dimmer / brighter                    |
-| F7 / F8 / F9                         | Previous / play-pause / next track             |
-| F10 / F11 / F12                      | Mute / volume down / volume up                 |
-| Del                                  | Ctrl+Power (macOS: shut down / restart dialog) |
-| Backspace                            | Forward delete                                 |
-| Tab                                  | Backlight on/off                               |
-| Q / A                                | Next / previous RGB effect                     |
-| W / S                                | Backlight brighter / dimmer                    |
-| E / D                                | Hue up / down                                  |
-| R / F                                | Saturation up / down                           |
-| T / G                                | Effect speed up / down                         |
-| N                                    | Toggle NKRO (n-key rollover)                   |
-| Knob press (either)                  | Backlight on/off                               |
-| Knobs                                | Backlight brightness (both)                    |
+| Key                 | Action                                         |
+| :------------------ | :--------------------------------------------- |
+| F1 / F2             | Screen brightness down / up                    |
+| F3 / F4             | Mission Control / Launchpad                    |
+| F5 / F6             | Backlight dimmer / brighter                    |
+| F7 / F8 / F9        | Previous / play-pause / next track             |
+| F10 / F11 / F12     | Mute / volume down / volume up                 |
+| Del                 | Ctrl+Power (macOS: shut down / restart dialog) |
+| Backspace           | Forward delete                                 |
+| Tab                 | Backlight on/off                               |
+| Q / A               | Next / previous RGB effect                     |
+| W / S               | Backlight brighter / dimmer                    |
+| E / D               | Hue up / down                                  |
+| R / F               | Saturation up / down                           |
+| T / G               | Effect speed up / down                         |
+| N                   | Toggle NKRO (n-key rollover)                   |
+| Knob press (either) | Backlight on/off                               |
+| Knobs               | Backlight brightness (both)                    |
 
-### Layer 2: "brackets" layer (toggled with the first macro key)
+### Layer 2: "brackets" layer (`BRACKETS`, toggled with the first left key)
 
 Same as layer 0, except:
 
@@ -153,11 +147,14 @@ Same as layer 0, except:
   | 2nd key right of `L`        | `A(KC_8)`    | `{`                      |
   | Key left of Enter (`#`/`$`) | `A(KC_9)`    | `}`                      |
 
-- The Home key is a real Home.
-- Fn keys are `MO(3)` instead of `MO(1)`.
+- Fn keys are `MO(BRACKETS_FN)` instead of `MO(FN)`.
 - **Knobs**: both control volume.
 
-### Layer 3: Fn while on layer 2
+Layer 2 is also the default layer when the Mac/Windows switch is on
+**Windows** (see `q11.c` in QMK), so that position gives the brackets layer
+permanently.
+
+### Layer 3: Fn while on layer 2 (`BRACKETS_FN`)
 
 Identical to layer 1.
 
@@ -177,10 +174,11 @@ reset to them:
   works for you (see [Flash](#flash-both-halves)). This also clears the EEPROM.
   The reset button doesn't clear it by itself.
 
-So **after every flash, the VIA layout is lost** and has to be reloaded from
-[`via.layout.json`](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/via.layout.json).
-The RGB color code is not affected by this, since it's compiled into the
-firmware.
+Since `keymap.c` holds the real layout, a reset is harmless. The flip side is
+that **VIA edits are temporary**: they last until the next reset, and they only
+apply to the half plugged into the computer (VIA writes to that half's EEPROM
+only, the other half keeps using `keymap.c`). To keep a change, copy it into
+`keymaps[]` (see [Making further changes](#making-further-changes)).
 
 ## Repository layout and CI
 
@@ -302,30 +300,20 @@ the reset button is the reliable method.
 (With QMK Toolbox instead: open the `.bin` file, tick "Auto-Flash", then do the
 reset button + plug-in steps for each half.)
 
-### Restore the VIA layout
+### Check the result
 
-1. Open [usevia.app](https://usevia.app) in Chrome (it needs WebHID) and
-   authorize the keyboard.
-2. In **Configure**, go to the **Save + Load** tab, click **Load Saved
-   Layout**, and pick
-   [`via.layout.json`](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/via.layout.json).
-3. Check that the first macro key toggles the backlight between blue and
-   purple.
-
-If VIA doesn't recognize the keyboard, Keychron publishes a VIA definition
-JSON for the Q11 ISO knob version on its website, which can be loaded in VIA's
-**Settings → Show Design tab → Design → Load**.
+Check that the first left key toggles the backlight between blue and purple.
 
 ## Making further changes
 
-- **Remapping keys, macros or knobs**: use VIA, no need to recompile. Afterwards
-  use **Save + Load → Save Current Layout** and overwrite
-  [`via.layout.json`](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/via.layout.json)
-  so the backup stays current.
-- **Anything VIA can't do** (custom behavior, lighting logic, tap/hold keys,
-  combos, etc.): edit the files in [the keymap
+- Edit the files in [the keymap
   folder](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/), then
-  compile, flash both halves, and reload the VIA layout.
+  compile and flash both halves. This covers remapping keys and knobs, as well
+  as anything VIA can't do (custom behavior, lighting logic, tap/hold keys,
+  combos, etc.).
+  - Keys are listed in `LAYOUT_92_iso(...)` order, which follows the physical
+    rows. `_______` (`KC_TRNS`) falls through to the layer below, `XXXXXXX`
+    (`KC_NO`) does nothing.
   - New features are usually turned on in `rules.mk` (`SOMETHING_ENABLE = yes`),
     tuned in `config.h` (`#define ...`), and used in `keymap.c`.
   - Code that depends on the layer or on key presses must work on the right half
@@ -335,25 +323,29 @@ JSON for the Q11 ISO knob version on its website, which can be loaded in VIA's
   - Useful docs: [RGB matrix](https://docs.qmk.fm/features/rgb_matrix),
     [keycodes](https://docs.qmk.fm/keycodes),
     [layers](https://docs.qmk.fm/feature_layers).
-- If you want `keymap.c` to be the source of truth instead of VIA, copy the VIA
-  layers into `keymaps[]`. The VIA file lists keys in matrix order (12 rows × 9
-  columns: rows 0–5 are the left half, 6–11 the right half), not in the visual
-  `LAYOUT_92_iso(...)` order.
+- **Trying a change in VIA first** is fine (no recompiling), but copy the result
+  into `keymaps[]` afterwards, or it's lost on the next reset. VIA runs at
+  [usevia.app](https://usevia.app) in Chrome (it needs WebHID). If it doesn't
+  recognize the keyboard, Keychron publishes a VIA definition JSON for the Q11
+  ISO knob version on its website, which can be loaded in VIA's **Settings →
+  Show Design tab → Design → Load**. To turn a VIA
+  backup ("Save + Load → Save Current Layout") into C, `qmk via2json -kb
+  keychron/q11/iso_encoder -l LAYOUT_92_iso <backup.json>` converts it to a QMK
+  keymap JSON in layout order. It doesn't convert the knobs, and some keycode
+  names are older than the ones `keymap.c` uses (`RGB_*` instead of `RM_*`,
+  `KC_POWER` instead of `KC_KB_POWER`). The VIA backup used to build the
+  current `keymap.c` is in the Git history
+  (`keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/via.layout.json`).
 
 ## Known quirks
 
 - **Layers 1 and 3 share the same red**, so the color doesn't tell you which Fn
   layer is active.
-- **The Mac/Windows switch** on the keyboard selects the *default* layer (0 on
-  Mac, 2 on Windows). The color code looks at `layer_state`, which doesn't
-  include the default layer. So on the Windows position the board shows layer
-  0's blue even though layer 2's keys are active, and the `TG(2)` key has no
-  visible effect. This setup assumes the switch stays on **Mac**.
+- **On the Windows switch position**, layer 2 is already the default, so the
+  `TG(BRACKETS)` key has no visible effect.
 - **RGB effects are hidden**: since every key is painted a solid color on each
   frame, the effect chosen with Fn+Q/A isn't visible. Brightness, and turning
   the backlight on/off, still work.
-- **Home key on layer 0** sends browser-home (`KC_WWW_HOME`) rather than Home,
-  unlike layer 2. This might be unintentional.
 - `SPLIT_RGB_MATRIX_ENABLE` is defined twice in `config.h` and isn't a current
   QMK option. It can be removed.
 
@@ -373,8 +365,10 @@ JSON for the Q11 ISO knob version on its website, which can be loaded in VIA's
 - **`qmk flash` keeps waiting for the bootloader**: make sure the reset button
   is held *before* the cable is plugged in, that the cable goes straight to the
   half being flashed, and that the cable carries data.
-- **Keys don't match the VIA layout after flashing**: expected. Reload
-  `via.layout.json` (see [How firmware and VIA
+- **Keys don't match `keymap.c` after flashing**: the EEPROM still holds an
+  older VIA copy of the layout, probably because the previous firmware was
+  built on the same day. Clear it by holding Esc (left half) or Del (right
+  half) while plugging in (see [How firmware and VIA
   interact](#how-firmware-and-via-interact)).
 - **Going back to stock**: flash with `-km default` (note that the upstream
   default keymap has no VIA support), or download Keychron's official firmware
