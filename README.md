@@ -45,7 +45,9 @@ is a custom RGB effect, like QMK's stock ones (breathing, rainbow…). It paints
 every key blue, or purple when the "brackets" layer is on, either toggled with
 `TG(BRACKETS)` or as the default layer on the Windows switch position. It's the
 effect the firmware starts with, and Fn+Q/A cycles through it and the stock
-effects (it comes after the last stock one).
+effects (it comes after the last stock one). The bottom left key (`LYR_RGB`)
+switches straight back to it, and turns the backlight on if it was off. That's
+a custom keycode, handled by `process_record_user()` in `keymap.c`.
 
 **The Fn color** comes from `rgb_matrix_indicators_advanced_user()` in
 `keymap.c`. QMK defines a do-nothing ("weak") version of this function and
@@ -121,7 +123,9 @@ Compared to the stock keymap:
   printed on the keycaps, fixing a well-known macOS quirk with ISO keyboards.
 - **Left column** (the 5 extra keys on the far left, top to bottom):
   1. `TG(BRACKETS)`: toggle layer 2 on/off (backlight turns purple/blue).
-  2. to 5. `XXXXXXX` (`KC_NO`): unused, they do nothing.
+  2. to 4. `XXXXXXX` (`KC_NO`): unused, they do nothing.
+  5. `LYR_RGB`: switch the backlight back to the `layer_color` effect (see
+     [Backlight color](#backlight-color)).
 - Both Fn keys are `MO(FN)`, which activates layer 1 while held.
 - **Knobs**: left = backlight brightness, right = volume. Pressing either knob
   = mute.
@@ -324,9 +328,8 @@ reset button + plug-in steps for each half.)
 
 Check that the first left key toggles the backlight between blue and purple.
 If the keyboard still shows the effect it had before flashing (RGB settings
-survive a flash), cycle with Fn+Q or Fn+A until the backlight is blue and the
-first left key turns it purple. `layer_color` comes right after the last stock
-effect. The choice is saved.
+survive a flash), press the bottom left key to switch to `layer_color`. The
+choice is saved.
 
 ## Making further changes
 

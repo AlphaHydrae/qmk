@@ -17,6 +17,11 @@
 
 #include "layers.h"
 
+enum custom_keycodes {
+    // Switches the backlight to the layer_color effect (and turns it on).
+    LYR_RGB = SAFE_RANGE,
+};
+
 // clang-format off
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [BASE] = LAYOUT_92_iso(
@@ -25,7 +30,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         XXXXXXX,       KC_TAB,   KC_Q,     KC_W,     KC_E,             KC_R,     KC_T,     KC_Y,     KC_U,     KC_I,     KC_O,     KC_P,       KC_LBRC,          KC_RBRC,                             KC_PGDN,
         XXXXXXX,       KC_CAPS,  KC_A,     KC_S,     KC_D,             KC_F,     KC_G,     KC_H,     KC_J,     KC_K,     KC_L,     KC_SCLN,    KC_QUOT,          KC_NUHS,  KC_ENT,                    KC_HOME,
         XXXXXXX,       KC_LSFT,  KC_GRV,   KC_Z,     KC_X,             KC_C,     KC_V,     KC_B,     KC_N,     KC_M,     KC_COMM,  KC_DOT,     KC_SLSH,                    KC_RSFT,  KC_UP,
-        XXXXXXX,       KC_LCTL,  KC_LOPT,  KC_LCMD,  MO(FN),                     KC_SPC,                       KC_SPC,             KC_RCMD,    MO(FN),           KC_RCTL,  KC_LEFT,  KC_DOWN,         KC_RGHT),
+        LYR_RGB,       KC_LCTL,  KC_LOPT,  KC_LCMD,  MO(FN),                     KC_SPC,                       KC_SPC,             KC_RCMD,    MO(FN),           KC_RCTL,  KC_LEFT,  KC_DOWN,         KC_RGHT),
 
     [FN] = LAYOUT_92_iso(
         RM_TOGG,       _______,  KC_BRID,  KC_BRIU,  KC_MCTL,          KC_LPAD,  RM_VALD,  RM_VALU,  KC_MPRV,  KC_MPLY,  KC_MNXT,  KC_MUTE,    KC_VOLD,          KC_VOLU,  _______,  C(KC_KB_POWER),  RM_TOGG,
@@ -41,7 +46,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         XXXXXXX,       KC_TAB,   KC_Q,     KC_W,     KC_E,             KC_R,     KC_T,     KC_Y,     KC_U,     KC_I,     KC_O,     KC_P,       A(KC_5),          A(KC_6),                             KC_PGDN,
         XXXXXXX,       KC_CAPS,  KC_A,     KC_S,     KC_D,             KC_F,     KC_G,     KC_H,     KC_J,     KC_K,     KC_L,     LSA(KC_7),  A(KC_8),          A(KC_9),  KC_ENT,                    KC_HOME,
         XXXXXXX,       KC_LSFT,  KC_GRV,   KC_Z,     KC_X,             KC_C,     KC_V,     KC_B,     KC_N,     KC_M,     KC_COMM,  KC_DOT,     KC_SLSH,                    KC_RSFT,  KC_UP,
-        XXXXXXX,       KC_LCTL,  KC_LOPT,  KC_LCMD,  MO(BRACKETS_FN),            KC_SPC,                       KC_SPC,             KC_RCMD,    MO(BRACKETS_FN),  KC_RCTL,  KC_LEFT,  KC_DOWN,         KC_RGHT),
+        LYR_RGB,       KC_LCTL,  KC_LOPT,  KC_LCMD,  MO(BRACKETS_FN),            KC_SPC,                       KC_SPC,             KC_RCMD,    MO(BRACKETS_FN),  KC_RCTL,  KC_LEFT,  KC_DOWN,         KC_RGHT),
 
     [BRACKETS_FN] = LAYOUT_92_iso(
         RM_TOGG,       _______,  KC_BRID,  KC_BRIU,  KC_MCTL,          KC_LPAD,  RM_VALD,  RM_VALU,  KC_MPRV,  KC_MPLY,  KC_MNXT,  KC_MUTE,    KC_VOLD,          KC_VOLU,  _______,  C(KC_KB_POWER),  RM_TOGG,
@@ -61,6 +66,18 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
 };
 #endif // ENCODER_MAP_ENABLE
 // clang-format on
+
+bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    switch (keycode) {
+        case LYR_RGB:
+            if (record->event.pressed) {
+                rgb_matrix_enable();
+                rgb_matrix_mode(RGB_MATRIX_CUSTOM_layer_color);
+            }
+            return false;
+    }
+    return true;
+}
 
 // Runs after every RGB effect (the custom layer_color one or a stock one), for
 // the LEDs in [led_min, led_max).
