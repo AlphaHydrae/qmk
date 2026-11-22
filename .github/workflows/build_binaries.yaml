@@ -1,0 +1,24 @@
+# From the qmk/qmk_userspace template. Builds every target in qmk.json on each
+# push, and publishes the firmware as the "latest" GitHub release.
+name: Build QMK firmware
+
+on: [push, workflow_dispatch]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: 'QMK Userspace Build'
+    uses: qmk/.github/.github/workflows/qmk_userspace_build.yml@main
+    with:
+      qmk_repo: qmk/qmk_firmware
+      qmk_ref: master
+
+  # Unlike the template, only publish successful builds of main, so that a
+  # failed build or a branch push doesn't replace the "latest" release.
+  publish:
+    name: 'QMK Userspace Publish'
+    uses: qmk/.github/.github/workflows/qmk_userspace_publish.yml@main
+    if: needs.build.result == 'success' && github.ref == 'refs/heads/main'
+    needs: build

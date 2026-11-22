@@ -5,13 +5,14 @@ Q11](https://www.keychron.com/products/keychron-q11-qmk-custom-mechanical-keyboa
 ISO split keyboard with two rotary encoders (knobs). It is built with
 [QMK](https://qmk.fm).
 
-The customization lives in two separate places, and they are installed in two
-different ways:
+Everything lives in the keymap folder,
+[`keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/`](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/),
+but in two parts that are installed in two different ways:
 
-| What                        | Where                                                                    | How it gets on the keyboard                  |
-| :-------------------------- | :----------------------------------------------------------------------- | :------------------------------------------- |
-| **Firmware** (C code)       | [`keychron-q11-iso/keymap/`](./keychron-q11-iso/keymap/)                 | Compile with QMK, flash over USB (each half) |
-| **Key layout** (VIA backup) | [`keychron-q11-iso/via.layout.json`](./keychron-q11-iso/via.layout.json) | Load in the VIA web app after flashing       |
+| What                        | File                                                | How it gets on the keyboard                  |
+| :-------------------------- | :-------------------------------------------------- | :------------------------------------------- |
+| **Firmware** (C code)       | `keymap.c`, `config.h`, `rules.mk`                  | Compile with QMK, flash over USB (each half) |
+| **Key layout** (VIA backup) | [`via.layout.json`](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/via.layout.json) | Load in the VIA web app after flashing       |
 
 The firmware adds things the web app can't do: the **backlight color changes
 with the active layer**. The VIA layout holds the key remapping, macros and knob
@@ -20,6 +21,7 @@ assignments, which the web app *can* edit.
 - [What the firmware does](#what-the-firmware-does)
 - [What the VIA layout does](#what-the-via-layout-does)
 - [How firmware and VIA interact](#how-firmware-and-via-interact)
+- [Repository layout and CI](#repository-layout-and-ci)
 - [Installing](#installing)
 - [Making further changes](#making-further-changes)
 - [Known quirks](#known-quirks)
@@ -91,9 +93,10 @@ Without `SPLIT_LAYER_STATE_ENABLE`, the right half would stay the layer-0 color.
 
 ## What the VIA layout does
 
-[`via.layout.json`](./keychron-q11-iso/via.layout.json) is a backup exported
-from the VIA web app ("Save + Load" → "Save Current Layout"). It stores 4
-layers, the knob assignments and the macros. Compared to the stock keymap:
+[`via.layout.json`](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/via.layout.json)
+is a backup exported from the VIA web app ("Save + Load" → "Save Current
+Layout"). It stores 4 layers, the knob assignments and the macros. Compared to
+the stock keymap:
 
 ### Layer 0: base (Mac switch position)
 
@@ -175,8 +178,28 @@ reset to them:
   The reset button doesn't clear it by itself.
 
 So **after every flash, the VIA layout is lost** and has to be reloaded from
-[`via.layout.json`](./keychron-q11-iso/via.layout.json). The RGB color code is
-not affected by this, since it's compiled into the firmware.
+[`via.layout.json`](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/via.layout.json).
+The RGB color code is not affected by this, since it's compiled into the
+firmware.
+
+## Repository layout and CI
+
+This repository is a QMK "external userspace", based on the
+[`qmk/qmk_userspace`](https://github.com/qmk/qmk_userspace) template. It holds
+only the keymap, and QMK's own tree (`~/qmk_firmware`) stays untouched:
+
+- The keymap lives where it would in QMK's tree,
+  `keyboards/<keyboard>/keymaps/<name>/`. The folder name is the keymap name
+  (`-km alphahydrae`).
+- [`qmk.json`](./qmk.json) lists the build targets (keyboard + keymap).
+  `qmk userspace-add` / `qmk userspace-remove` edit it.
+- [`.github/workflows/build_binaries.yaml`](./.github/workflows/build_binaries.yaml)
+  builds every target on each push, against the latest upstream `qmk_firmware`.
+  Each run's firmware is downloadable from its page in the GitHub Actions tab.
+  Successful builds of `main` are also published as the [`latest`
+  release](https://github.com/AlphaHydrae/qmk/releases/tag/latest), replacing
+  the previous one. The template publishes after every push, even failed ones
+  and other branches. This repository doesn't.
 
 ## Installing
 
@@ -200,35 +223,35 @@ Check that the stock firmware compiles:
 qmk compile -kb keychron/q11/iso_encoder -km default
 ```
 
-### Link the keymap into QMK
+### Point QMK at this repository
 
-QMK looks for keymaps inside its own tree, under
-`keyboards/<keyboard>/keymaps/<name>/`. Instead of copying the files there,
-symlink this repository's keymap folder so edits here are picked up directly:
+QMK normally looks for keymaps inside its own tree. Tell it to also look in
+this repository (run from the repository's root):
 
 ```bash
-ln -s ~/path/to/qmk/keychron-q11-iso/keymap \
-  ~/qmk_firmware/keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae-keychron-q11-iso
+qmk config user.overlay_dir="$(realpath .)"
 ```
-
-The link name (`alphahydrae-keychron-q11-iso`) becomes the keymap name used in
-the commands below.
 
 Optionally, make it the default so you can omit `-kb` and `-km`:
 
 ```bash
-qmk config user.keyboard=keychron/q11/iso_encoder user.keymap=alphahydrae-keychron-q11-iso
+qmk config user.keyboard=keychron/q11/iso_encoder user.keymap=alphahydrae
 ```
 
 ### Compile
 
 ```bash
-qmk compile -kb keychron/q11/iso_encoder -km alphahydrae-keychron-q11-iso
+qmk compile -kb keychron/q11/iso_encoder -km alphahydrae
 ```
 
-This produces
-`~/qmk_firmware/keychron_q11_iso_encoder_alphahydrae-keychron-q11-iso.bin`.
-Compiler errors show up here, so it's worth compiling before trying to flash.
+This produces `keychron_q11_iso_encoder_alphahydrae.bin` in this repository's
+root (ignored by Git). Compiler errors show up here, so it's worth compiling
+before trying to flash. `qmk userspace-compile` builds every target in
+`qmk.json` at once.
+
+Instead of compiling locally, you can also download the `.bin` built by CI
+(see [Repository layout and CI](#repository-layout-and-ci)) and flash it with
+QMK Toolbox.
 
 ### Flash (both halves)
 
@@ -247,7 +270,7 @@ something pointy (the end of the keycap puller, a SIM-eject pin, a paperclip)
 2. Run:
 
    ```bash
-   qmk flash -kb keychron/q11/iso_encoder -km alphahydrae-keychron-q11-iso
+   qmk flash -kb keychron/q11/iso_encoder -km alphahydrae
    ```
 
    It compiles if needed, then waits, printing that it can't find a bootloader.
@@ -274,7 +297,7 @@ reset button + plug-in steps for each half.)
    authorize the keyboard.
 2. In **Configure**, go to the **Save + Load** tab, click **Load Saved
    Layout**, and pick
-   [`keychron-q11-iso/via.layout.json`](./keychron-q11-iso/via.layout.json).
+   [`via.layout.json`](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/via.layout.json).
 3. Check that the first macro key toggles the backlight between blue and
    purple.
 
@@ -286,12 +309,12 @@ JSON for the Q11 ISO knob version on its website, which can be loaded in VIA's
 
 - **Remapping keys, macros or knobs**: use VIA, no need to recompile. Afterwards
   use **Save + Load → Save Current Layout** and overwrite
-  [`via.layout.json`](./keychron-q11-iso/via.layout.json) so the backup stays
-  current.
+  [`via.layout.json`](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/via.layout.json)
+  so the backup stays current.
 - **Anything VIA can't do** (custom behavior, lighting logic, tap/hold keys,
-  combos, etc.): edit the files in
-  [`keychron-q11-iso/keymap/`](./keychron-q11-iso/keymap/), then compile, flash
-  both halves, and reload the VIA layout.
+  combos, etc.): edit the files in [the keymap
+  folder](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/), then
+  compile, flash both halves, and reload the VIA layout.
   - New features are usually turned on in `rules.mk` (`SOMETHING_ENABLE = yes`),
     tuned in `config.h` (`#define ...`), and used in `keymap.c`.
   - Code that depends on the layer or on key presses must work on the right half
