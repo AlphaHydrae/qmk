@@ -8,13 +8,21 @@ permissions:
   contents: write
 
 jobs:
-  # Unit tests of the color logic, built with the runner's own C compiler.
+  # Unit tests of the color logic, built with the runner's own C compiler. They
+  # only need QMK's keycodes header, so qmk_firmware is checked out sparsely.
   test:
     name: 'Unit tests'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: make test
+      - uses: actions/checkout@v4
+        with:
+          repository: qmk/qmk_firmware
+          ref: master
+          path: qmk_firmware
+          sparse-checkout: quantum/keycodes.h
+          sparse-checkout-cone-mode: false
+      - run: make test QMK_HOME=qmk_firmware
 
   build:
     name: 'QMK Userspace Build'

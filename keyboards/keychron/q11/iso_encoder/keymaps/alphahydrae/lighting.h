@@ -1,8 +1,9 @@
 #pragma once
 
-// The color logic, as plain C with no QMK dependencies, so that it can be
-// unit-tested. The QMK glue (keymap.c, rgb_matrix_user.inc) only reads the
-// keyboard's state and applies the colors returned here.
+// The color logic, as plain C, so that it can be unit-tested. Its only QMK
+// dependency is the keycode values (quantum/keycodes.h, a standalone header).
+// The QMK glue (keymap.c, rgb_matrix_user.inc) only reads the keyboard's state
+// and applies the colors returned here.
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -34,3 +35,27 @@ bool is_fn_layer(uint8_t layer);
  * The Fn color (dark red), scaled by the brightness.
  */
 lighting_rgb_t fn_color(uint8_t brightness);
+
+/**
+ * Whether Caps Lock changes what the key types: KC_A to KC_Z. With the Mac's
+ * input source set to Swiss French, Caps Lock leaves the accented keys alone.
+ */
+bool is_caps_affected(uint16_t keycode);
+
+/**
+ * Whether the key turns amber while Caps Lock is on: the keys Caps Lock
+ * affects, and the Caps Lock key itself.
+ */
+bool is_caps_highlighted(uint16_t keycode);
+
+/**
+ * The color drawn on top of the current effect for one key, given the highest
+ * active layer, the key's keycode on the layer in effect for it, the Caps Lock
+ * state and the brightness.
+ *
+ * Returns true and sets *color when the key gets an overlay color: dark red on
+ * the Fn layers, otherwise amber for the keys Caps Lock affects and the Caps
+ * Lock key itself while it's on. Returns false (and leaves *color alone) when
+ * the key keeps the color the effect drew.
+ */
+bool key_color(uint8_t layer, uint16_t keycode, bool caps_lock, uint8_t brightness, lighting_rgb_t *color);

@@ -1,9 +1,11 @@
 // Tests for the color logic in lighting.c. The input space is small, so every
-// combination of layer and brightness is checked, not random samples.
+// combination of layer, keycode, Caps Lock state and brightness is checked, not
+// random samples.
 
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "keycodes.h"
 #include "layers.h"
 #include "lighting.h"
 
@@ -86,10 +88,85 @@ static void test_fn(void) {
     }
 }
 
+static void test_caps_affected(void) {
+    // Every letter, in the order of the alphabet, not just the first and last.
+    const uint16_t letters[] = {KC_A, KC_B, KC_C, KC_D, KC_E, KC_F, KC_G, KC_H, KC_I, KC_J, KC_K, KC_L, KC_M,
+                                KC_N, KC_O, KC_P, KC_Q, KC_R, KC_S, KC_T, KC_U, KC_V, KC_W, KC_X, KC_Y, KC_Z};
+    int            affected  = 0;
+    for (size_t i = 0; i < sizeof(letters) / sizeof(letters[0]); i++) {
+        CHECK(is_caps_affected(letters[i]), "letter %zu", i);
+    }
+    for (int keycode = 0; keycode <= 0xFFFF; keycode++) {
+        affected += is_caps_affected((uint16_t)keycode);
+    }
+    CHECK(affected == 26, "%d keycodes affected, not just the 26 letters", affected);
+
+    // Keys around the letters that Caps Lock leaves alone on the Swiss French
+    // Mac layout. Letters with modifiers (S(KC_A)…) are covered by the count
+    // above; their macros aren't in keycodes.h.
+    const uint16_t unaffected[] = {KC_TRNS, KC_NO, KC_CAPS, KC_1, KC_0, KC_LBRC, KC_RBRC, KC_SCLN,
+                                   KC_QUOT, KC_NUHS, KC_GRV, KC_COMM, KC_DOT, KC_SLSH, KC_SPC};
+    for (size_t i = 0; i < sizeof(unaffected) / sizeof(unaffected[0]); i++) {
+        CHECK(!is_caps_affected(unaffected[i]), "keycode 0x%04X", unaffected[i]);
+    }
+
+    // The highlighted keys are the affected ones plus the Caps Lock key.
+    int highlighted = 0;
+    for (int keycode = 0; keycode <= 0xFFFF; keycode++) {
+        bool h = is_caps_highlighted((uint16_t)keycode);
+        highlighted += h;
+        CHECK(h == (is_caps_affected((uint16_t)keycode) || keycode == KC_CAPS), "keycode 0x%04X", keycode);
+    }
+    CHECK(highlighted == 27, "%d keycodes highlighted, not the 26 letters and Caps Lock", highlighted);
+}
+
+static void test_key_color(void) {
+    // A color key_color() never returns, to check that it leaves *color alone.
+    const lighting_rgb_t untouched = rgb(1, 2, 3);
+
+    lighting_rgb_t c = untouched;
+    CHECK(key_color(BASE, KC_A, true, 255, &c) && rgb_equal(c, rgb(255, 140, 0)), "Caps Lock is amber");
+    c = untouched;
+    CHECK(key_color(BASE, KC_CAPS, true, 255, &c) && rgb_equal(c, rgb(255, 140, 0)), "Caps Lock key is amber");
+    c = untouched;
+    CHECK(!key_color(BASE, KC_CAPS, false, 255, &c), "Caps Lock key without Caps Lock");
+
+    for (int layer = 0; layer < NUM_LAYERS; layer++) {
+        for (int caps = 0; caps <= 1; caps++) {
+            for (int keycode = 0; keycode <= 0xFFFF; keycode++) {
+                bool affected = is_caps_highlighted((uint16_t)keycode);
+                for (int brightness = 0; brightness <= 255; brightness++) {
+                    c              = untouched;
+                    bool overlaid  = key_color((uint8_t)layer, (uint16_t)keycode, caps, (uint8_t)brightness, &c);
+                    bool expect_on = is_fn_layer((uint8_t)layer) || (caps && affected);
+
+                    CHECK(overlaid == expect_on, "layer %d, caps %d, keycode 0x%04X, brightness %d", layer, caps, keycode, brightness);
+                    if (!overlaid) {
+                        // No overlay: the key keeps the effect's color (the
+                        // base color with layer_color).
+                        CHECK(rgb_equal(c, untouched), "layer %d, caps %d, keycode 0x%04X: color changed", layer, caps, keycode);
+                        continue;
+                    }
+
+                    // The Fn color wins over Caps Lock.
+                    lighting_rgb_t expected = is_fn_layer((uint8_t)layer)
+                                                  ? fn_color((uint8_t)brightness)
+                                                  : rgb(lighting_scale(255, (uint8_t)brightness), lighting_scale(140, (uint8_t)brightness), 0);
+                    CHECK(rgb_equal(c, expected), "layer %d, caps %d, keycode 0x%04X, brightness %d", layer, caps, keycode, brightness);
+                    CHECK(rgb_within(c, (uint8_t)brightness), "layer %d, caps %d, keycode 0x%04X, brightness %d", layer, caps, keycode, brightness);
+                    CHECK(brightness != 0 || rgb_is_black(c), "layer %d, caps %d, keycode 0x%04X", layer, caps, keycode);
+                }
+            }
+        }
+    }
+}
+
 int main(void) {
     test_scale();
     test_base_color();
     test_fn();
+    test_caps_affected();
+    test_key_color();
 
     if (failures > 0) {
         fprintf(stderr, "%d of %d checks failed\n", failures, checks);

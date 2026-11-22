@@ -13,9 +13,9 @@ Everything lives in the keymap folder,
 
 | File                  | What it holds                                                         |
 | :-------------------- | :-------------------------------------------------------------------- |
-| `keymap.c`            | The key layout, the knobs, and the red backlight while Fn is held     |
+| `keymap.c`            | The key layout, the knobs, and the Fn and Caps Lock overlays          |
 | `rgb_matrix_user.inc` | The `layer_color` RGB effect: the per-layer backlight color           |
-| `lighting.h` / `.c`   | The color logic itself, plain C with no QMK dependencies (tested)     |
+| `lighting.h` / `.c`   | The color logic itself, plain C (tested)                              |
 | `layers.h`            | The layer names, shared by the files above                            |
 | `rules.mk`            | Which QMK features are built in                                       |
 | `config.h`            | Split keyboard settings, and the RGB effect to start with             |
@@ -53,13 +53,27 @@ effects (it comes after the last stock one). The bottom left key (`LYR_RGB`)
 switches straight back to it, and turns the backlight on if it was off. That's
 a custom keycode, handled by `process_record_user()` in `keymap.c`.
 
-**The Fn color** comes from `rgb_matrix_indicators_advanced_user()` in
-`keymap.c`. QMK defines a do-nothing ("weak") version of this function and
-calls it on every frame, after the current effect has been drawn. Defining
-your own version replaces it, a bit like overriding a hook. Here it paints
-every key dark red while Fn is held, on top of whatever effect is selected.
-QMK calls it with a range of LEDs (`led_min` to `led_max`) because it spreads
-the drawing over several calls.
+**The Fn and Caps Lock overlays** come from
+`rgb_matrix_indicators_advanced_user()` in `keymap.c`. QMK defines a do-nothing
+("weak") version of this function and calls it on every frame, after the current
+effect has been drawn. Defining your own version replaces it, a bit like
+overriding a hook. QMK calls it with a range of LEDs (`led_min` to `led_max`)
+because it spreads the drawing over several calls. Here it draws on top of
+whatever effect is selected:
+
+- While Fn is held, every key is dark red.
+- Otherwise, while Caps Lock is on, the letter keys (`KC_A` to `KC_Z`) and the
+  Caps Lock key itself are amber (`255, 140, 0`). With the Mac's input source
+  set to Swiss French, Caps Lock doesn't change the accented keys (è, é, à…), so
+  they aren't highlighted. The amber comes back when Fn is released.
+- The other keys keep the color the effect drew.
+
+The function decides per key, from its keycode on the layer actually in effect
+for it (`layer_switch_get_layer()`, then `keymap_key_to_keycode()`), so a
+transparent key counts as the key of the layer below. Both halves do this lookup
+with their own copy of the keymap, so they must use the same keymap (see [How
+firmware and VIA interact](#how-firmware-and-via-interact): VIA edits only reach
+the left half).
 
 | Active layer                 | Color set (R, G, B) | Looks like | Drawn by        |
 | :--------------------------- | :------------------ | :--------- | :-------------- |
@@ -68,21 +82,22 @@ the drawing over several calls.
 | 2 (`BRACKETS`)               | `64, 0, 64`         | purple     | `layer_color`   |
 | 3 (`BRACKETS_FN`, Fn held)   | `139, 0, 0`         | dark red   | `keymap.c`      |
 
-Both scale the color by the backlight brightness (`rgb_matrix_get_val()`,
+All the colors are scaled by the backlight brightness (`rgb_matrix_get_val()`,
 0–255: `value * brightness / 255`), so the brightness keys and knob still work.
 The layers include the default layer set by the Mac/Windows switch
 (`layer_state | default_layer_state`).
 
 The colors themselves are decided in
 [`lighting.c`](./keyboards/keychron/q11/iso_encoder/keymaps/alphahydrae/lighting.c),
-which doesn't include any QMK header. `rgb_matrix_user.inc` and `keymap.c` only
-read the keyboard's state (active layer, brightness), ask `lighting.c` for the
-color, and set the LEDs. This keeps the logic testable on the computer (see
-[Tests](#tests)).
+whose only QMK header is `quantum/keycodes.h` (the keycode values, a
+standalone header). `rgb_matrix_user.inc` and `keymap.c` only read the
+keyboard's state (active layer, keycodes, Caps Lock, brightness), ask
+`lighting.c` for the color, and set the LEDs. This keeps the logic testable on
+the computer (see [Tests](#tests)).
 
-The function returns `true`, which lets the keyboard's own code (`q11.c` in
-QMK) draw its indicator on top: the Caps Lock key turns white while Caps Lock
-is on.
+The function returns `false`, which stops the keyboard's own code (`q11.c` in
+QMK) from drawing its indicator on top (it would turn the Caps Lock key white
+while Caps Lock is on).
 
 ### `rules.mk`: build features
 
@@ -102,16 +117,20 @@ can't talk to this firmware.
 
 The Q11 is a split keyboard. Each half has its own microcontroller and drives
 its own LEDs, and only the half plugged into the computer (the "master", the
-left one) knows which layer is active. Because the color code runs on **both**
-halves, the layer state has to be sent to the other half:
+left one) knows which layer is active and whether Caps Lock is on. Because the
+color code runs on **both** halves, that state has to be sent to the other
+half:
 
 ```c
 #define SPLIT_LAYER_STATE_ENABLE  // sync active layer to the other half (needed for the colors)
+#define SPLIT_LED_STATE_ENABLE    // sync Caps Lock to the other half (needed for the Caps Lock overlay)
 #define SPLIT_TRANSPORT_MIRROR    // mirror key presses to the other half (only matters for reactive RGB effects)
 #define SPLIT_RGB_MATRIX_ENABLE   // not a recognized QMK option (defined twice); has no effect
 ```
 
 Without `SPLIT_LAYER_STATE_ENABLE`, the right half would stay the layer-0 color.
+Without `SPLIT_LED_STATE_ENABLE`, the right half's letters (Y, U, H, J, N, M…)
+wouldn't turn amber.
 The RGB settings (effect, brightness…) are synced without any option, because
 the keyboard declares how many LEDs each half has.
 
@@ -242,7 +261,7 @@ only the keymap, and QMK's own tree (`~/qmk_firmware`) stays untouched:
   | Command        | Does                                                      |
   | :------------- | :-------------------------------------------------------- |
   | `make`         | `make test`, then `make compile`                          |
-  | `make test`    | Builds and runs the unit tests (only needs a C compiler)  |
+  | `make test`    | Builds and runs the unit tests (no `qmk` tool needed)     |
   | `make compile` | `qmk compile` for this keyboard and keymap                |
   | `make flash`   | `qmk flash` for this keyboard and keymap (one half)       |
   | `make clean`   | Deletes the test build and the firmware files             |
@@ -250,16 +269,28 @@ only the keymap, and QMK's own tree (`~/qmk_firmware`) stays untouched:
 ### Tests
 
 [`test/test_lighting.c`](./test/test_lighting.c) tests `lighting.c` on the
-computer, without a keyboard or QMK, using the computer's own C compiler:
+computer, without a keyboard or the `qmk` tool, using the computer's own C
+compiler. They only need QMK's keycode values, from `quantum/keycodes.h` in a
+`qmk_firmware` checkout (`~/qmk_firmware` by default; CI checks out just that
+file):
 
 ```bash
 make test
+make test QMK_HOME=/path/to/qmk_firmware
 ```
 
-The input space is small (4 layers, 256 brightness levels), so the tests check
-every combination rather than random samples: the documented colors at full
-brightness, that every channel is the full color scaled by the brightness and
-never exceeds it, and that brightness 0 gives black.
+The input space is small (4 layers, 65,536 keycodes, Caps Lock on or off, 256
+brightness levels), so the tests check every combination rather than random
+samples, about 400 million checks in under a second:
+
+- The documented colors at full brightness.
+- Every channel is the full color scaled by the brightness and never exceeds
+  it, and brightness 0 gives black.
+- Exactly the 26 letter keycodes are affected by Caps Lock, and those plus
+  `KC_CAPS` are highlighted.
+- On the Fn layers, every key is dark red, whatever the Caps Lock state.
+- Otherwise, a key is amber exactly when Caps Lock is on and it's a letter or
+  the Caps Lock key, and every other key keeps the effect's color.
 
 The firmware code that reads the keyboard's state and sets the LEDs isn't
 covered, so lighting changes still need a check on the keyboard.

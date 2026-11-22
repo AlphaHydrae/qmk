@@ -81,15 +81,34 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 }
 
 // Runs after every RGB effect (the custom layer_color one or a stock one), for
-// the LEDs in [led_min, led_max).
+// the LEDs in [led_min, led_max). Draws the Fn and Caps Lock overlays, decided
+// per key by key_color() in lighting.c.
 bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
-    uint8_t layer = get_highest_layer(layer_state | default_layer_state);
-    if (is_fn_layer(layer)) {
-        lighting_rgb_t color = fn_color(rgb_matrix_get_val());
-        for (uint8_t i = led_min; i < led_max; i++) {
-            rgb_matrix_set_color(i, color.r, color.g, color.b);
+    uint8_t layer      = get_highest_layer(layer_state | default_layer_state);
+    bool    caps_lock  = host_keyboard_led_state().caps_lock;
+    uint8_t brightness = rgb_matrix_get_val();
+
+    // Every LED of the Q11 sits under a key, so looping over the matrix covers
+    // them all. The matrix spans both halves; each half only draws its own LEDs.
+    for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
+        for (uint8_t col = 0; col < MATRIX_COLS; col++) {
+            uint8_t led = g_led_config.matrix_co[row][col];
+            if (led == NO_LED || led < led_min || led >= led_max) {
+                continue;
+            }
+
+            // The keycode on the layer in effect for this key, so that
+            // transparent keys resolve to the layer below.
+            keypos_t       key     = {.col = col, .row = row};
+            uint16_t       keycode = keymap_key_to_keycode(layer_switch_get_layer(key), key);
+            lighting_rgb_t color;
+            if (key_color(layer, keycode, caps_lock, brightness, &color)) {
+                rgb_matrix_set_color(led, color.r, color.g, color.b);
+            }
         }
     }
-    // true lets the keyboard code (q11.c) draw its Caps Lock indicator on top.
-    return true;
+
+    // false stops the keyboard code (q11.c) from painting the Caps Lock key
+    // white on top.
+    return false;
 }
